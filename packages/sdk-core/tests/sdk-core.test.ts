@@ -196,6 +196,69 @@ test("verification report hash ignores reportHash and signature fields", () => {
   assert.equal(hashVerificationReport(withDecorations), reportFixture.hash);
 });
 
+test("proof bundle validation rejects duplicate call indices and mismatched aggregate usage", () => {
+  const proofBundleFixture = loadFixture<ProofBundle>("test/fixtures/protocol/proof-bundles/proof-bundle.pass-basic.json");
+  const invalidBundle = structuredClone(proofBundleFixture.object);
+
+  invalidBundle.receipts = [
+    invalidBundle.receipts[0],
+    {
+      ...structuredClone(invalidBundle.receipts[0]),
+      providerProofId: "mock-proof-duplicate",
+      requestHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      responseHash: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      rawProofHash: "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ];
+  invalidBundle.aggregateUsage.totalTokens = invalidBundle.receipts[0].extracted.usage.totalTokens;
+
+  assert.throws(() => hashProofBundle(invalidBundle), /callIndex must be unique|sum of receipt usage totals/);
+});
+
+test("proof bundle validation rejects receipt task binding mismatches", () => {
+  const proofBundleFixture = loadFixture<ProofBundle>("test/fixtures/protocol/proof-bundles/proof-bundle.pass-basic.json");
+  const invalidBundle = structuredClone(proofBundleFixture.object);
+
+  invalidBundle.receipts[0].taskContext.commitmentHash =
+    "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+  assert.throws(() => hashProofBundle(invalidBundle), /commitmentHash must match ProofBundle\.commitmentHash/);
+});
+
+test("verification report helpers reject inconsistent settlement actions", () => {
+  const reportFixture = loadFixture<UnsignedVerificationReport>(
+    "test/fixtures/protocol/verification-reports/verification-report.pass-basic.unsigned.json"
+  );
+  const invalidReport = {
+    ...reportFixture.object,
+    passed: false,
+    settlement: {
+      ...reportFixture.object.settlement,
+      action: "RELEASE" as const
+    }
+  };
+
+  assert.throws(
+    () => buildVerificationReportTypedData(invalidReport),
+    /settlement\.action must be REFUND when UnsignedVerificationReport\.passed is false/
+  );
+});
+
+test("verification report helpers reject mismatched reportHash decorations", () => {
+  const reportFixture = loadFixture<UnsignedVerificationReport>(
+    "test/fixtures/protocol/verification-reports/verification-report.pass-basic.unsigned.json"
+  );
+  const invalidReport = {
+    ...reportFixture.object,
+    reportHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const
+  };
+
+  assert.throws(
+    () => buildVerificationReportTypedData(invalidReport),
+    /reportHash does not match the canonical unsigned report hash/
+  );
+});
+
 test("eip712 helpers reproduce the verification report vector", () => {
   const reportFixture = loadFixture<UnsignedVerificationReport>(
     "test/fixtures/protocol/verification-reports/verification-report.pass-basic.unsigned.json"

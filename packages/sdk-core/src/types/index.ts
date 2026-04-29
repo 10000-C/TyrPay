@@ -441,6 +441,7 @@ export function assertProofBundle(value: unknown): asserts value is ProofBundle 
   object.receipts.forEach((receipt) => assertDeliveryReceipt(receipt));
   assertAggregateUsage(object.aggregateUsage, "ProofBundle.aggregateUsage");
   assertUnixMillis(object.createdAt, "ProofBundle.createdAt");
+  assertProofBundleReceipts(object as unknown as ProofBundle);
 }
 
 export function assertUnsignedVerificationReport(value: unknown): asserts value is UnsignedVerificationReport {
@@ -482,9 +483,55 @@ function assertVerificationReportBase(object: Record<string, unknown>, label: st
   assertVerificationChecks(object.checks, `${label}.checks`);
   assertAggregateUsage(object.aggregateUsage, `${label}.aggregateUsage`);
   assertVerificationSettlement(object.settlement, `${label}.settlement`);
+  assertVerificationOutcomeConsistency(object, label);
   assertAddress(object.verifier, `${label}.verifier`);
   assertUnixMillis(object.verifiedAt, `${label}.verifiedAt`);
   assertOptionalBytes32(object.reportHash, `${label}.reportHash`);
+}
+
+function assertProofBundleReceipts(object: ProofBundle): void {
+  const seenCallIndices = new Set<number>();
+  let totalReceiptTokens = 0;
+
+  object.receipts.forEach((receipt, index) => {
+    if (receipt.taskContext.taskId !== object.taskId) {
+      throw new TypeError(`ProofBundle.receipts[${index}].taskContext.taskId must match ProofBundle.taskId.`);
+    }
+
+    if (receipt.taskContext.commitmentHash !== object.commitmentHash) {
+      throw new TypeError(
+        `ProofBundle.receipts[${index}].taskContext.commitmentHash must match ProofBundle.commitmentHash.`
+      );
+    }
+
+    if (receipt.taskContext.seller !== object.seller) {
+      throw new TypeError(`ProofBundle.receipts[${index}].taskContext.seller must match ProofBundle.seller.`);
+    }
+
+    if (seenCallIndices.has(receipt.callIndex)) {
+      throw new TypeError(`ProofBundle.receipts[${index}].callIndex must be unique within the bundle.`);
+    }
+
+    seenCallIndices.add(receipt.callIndex);
+    totalReceiptTokens += receipt.extracted.usage.totalTokens;
+  });
+
+  if (totalReceiptTokens !== object.aggregateUsage.totalTokens) {
+    throw new TypeError("ProofBundle.aggregateUsage.totalTokens must equal the sum of receipt usage totals.");
+  }
+}
+
+function assertVerificationOutcomeConsistency(object: Record<string, unknown>, label: string): void {
+  const settlement = object.settlement as VerificationSettlement;
+  const passed = object.passed as boolean;
+
+  if (passed && settlement.action !== "RELEASE") {
+    throw new TypeError(`${label}.settlement.action must be RELEASE when ${label}.passed is true.`);
+  }
+
+  if (!passed && settlement.action !== "REFUND") {
+    throw new TypeError(`${label}.settlement.action must be REFUND when ${label}.passed is false.`);
+  }
 }
 
 function assertCommitmentTarget(value: unknown, fieldName: string): asserts value is CommitmentTarget {
