@@ -7,7 +7,7 @@ Each case should become at least one contract, SDK, verifier, or E2E test.
 
 | Case | Current State | Attempt | Expected Result |
 |---|---|---|---|
-| Duplicate intent creation with same client nonce | Any | `createTaskIntent` | Allowed only if contract task identity remains unique. |
+| Repeated task creation with economically identical parameters | Any | `createTaskIntent` | Allowed if contract task identity remains unique. Phase 1 does not require deduplication. |
 | Commitment submitted by non-seller | `INTENT_CREATED` | `submitCommitment` | Revert. |
 | Empty commitment hash | `INTENT_CREATED` | `submitCommitment` | Revert. |
 | Commitment after deadline | `INTENT_CREATED` | `submitCommitment` | Revert or terminal cancellation, depending on implementation entrypoint. |
@@ -18,7 +18,8 @@ Each case should become at least one contract, SDK, verifier, or E2E test.
 | Proof before funding | `COMMITMENT_SUBMITTED` | `submitProofBundle` | Revert. |
 | Proof submitted by non-seller | `FUNDED` | `submitProofBundle` | Revert. |
 | Empty proof bundle hash | `FUNDED` | `submitProofBundle` | Revert. |
-| Proof after deadline | `FUNDED` | `submitProofBundle` | Revert; Buyer can refund. |
+| Proof submitted after `deadline` but within proof submission grace period | `FUNDED` | `submitProofBundle` | Allowed if receipt timestamps still satisfy `observedAt <= deadline`. |
+| Proof submitted after proof submission grace period | `FUNDED` | `submitProofBundle` | Revert; Buyer can refund. |
 | Settle before proof | `FUNDED` | `settle` | Revert. |
 | Settle with unauthorized verifier | `PROOF_SUBMITTED` | `settle` | Revert. |
 | Settle with malformed report | `PROOF_SUBMITTED` | `settle` | Revert. |
@@ -44,7 +45,7 @@ Each case should become at least one contract, SDK, verifier, or E2E test.
 | Bundle binds wrong `taskNonce` | Verifier MUST reject. |
 | Bundle binds wrong `commitmentHash` | Verifier MUST reject. |
 | Bundle binds wrong `buyer`, `seller`, `chainId`, or `settlementContract` | Verifier MUST reject. |
-| Duplicate receipt in same bundle | Verifier MUST reject or count it once; Phase 1 SHOULD reject. |
+| Duplicate `callIndex` in same bundle | Verifier MUST reject. |
 | Empty receipt list | Verifier MUST fail `usageSatisfied`. |
 | Receipt has unsupported proof provider | Verifier MUST reject unless provider is explicitly enabled. |
 | Receipt timestamp before `fundedAt` | Verifier MUST fail `withinTaskWindow`. |
@@ -79,10 +80,10 @@ Each case should become at least one contract, SDK, verifier, or E2E test.
 
 | Case | Expected Result |
 |---|---|
-| No commitment before acceptance deadline | SDK MAY expose `EXPIRED`; no escrow movement is required. |
+| No commitment before deadline | SDK MAY expose `EXPIRED`; no escrow movement is required. |
 | Commitment submitted but Buyer never funds | SDK MAY expose `EXPIRED`; no escrow movement is required. |
-| Funded but no proof before deadline | Buyer can call refund path. |
-| Proof submitted but verifier unavailable | Funds remain escrowed until report settlement or explicit governance/emergency process. Phase 1 SHOULD keep this out of the core protocol. |
+| Funded but no proof before proof submission grace period ends | Buyer can call refund path after the grace period expires. |
+| Proof submitted but verifier unavailable | Buyer can call refund path after `verificationTimeout` expires if no settlement report was successfully consumed. |
 
 ## E2E Minimum Tests
 
@@ -95,4 +96,4 @@ The first closed-loop test suite MUST cover:
 | Valid proof with insufficient usage | `REFUNDED` |
 | Replayed proof bundle | First task settles or refunds; replay reverts. |
 | Unauthorized verifier signature | Revert, state remains `PROOF_SUBMITTED`. |
-| Proof after deadline | Revert on proof submission or verifier fail, depending on timing policy. |
+| Execution before deadline, proof submitted within grace period | `SETTLED` or `REFUNDED`, depending on report outcome. |

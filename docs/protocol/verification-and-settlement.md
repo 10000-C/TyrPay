@@ -12,6 +12,7 @@ Verifier MUST load:
 | Commitment hash and URI | Settlement contract and storage. |
 | Proof bundle hash and URI | Settlement contract and storage. |
 | Raw proof objects | Storage through receipt URIs. |
+| Contract timing config | Settlement contract view for `proofSubmissionGracePeriod` and `verificationTimeout`. |
 | Verifier authorization | Verifier registry or configured contract view. |
 
 Verifier MUST verify storage objects by recomputing hashes before using them.
@@ -27,6 +28,7 @@ Verifier MUST verify storage objects by recomputing hashes before using them.
 | `zkTlsProofValid` | Every raw proof verifies under its provider adapter. |
 | `endpointMatched` | Every receipt target satisfies commitment target constraints. |
 | `taskContextMatched` | Every receipt context matches task and commitment. |
+| `callIndicesUnique` | Every receipt uses a unique `callIndex` within the bundle. |
 | `proofNotConsumed` | No proof, receipt, response, or call intent was previously consumed. |
 | `withinTaskWindow` | Every receipt timestamp is `>= fundedAt` and `<= deadline`. |
 | `modelMatched` | Every observed model is in `allowedModels`. |
@@ -43,6 +45,7 @@ passed =
   zkTlsProofValid &&
   endpointMatched &&
   taskContextMatched &&
+  callIndicesUnique &&
   proofNotConsumed &&
   withinTaskWindow &&
   modelMatched &&
@@ -65,6 +68,18 @@ out of scope.
 
 Verifier SHOULD NOT sign a report when it cannot obtain required inputs from
 storage or chain.
+
+Temporary unavailability is not the same as semantic failure. Examples include:
+
+| Availability Issue |
+|---|
+| RPC lag or transient chain read failure. |
+| Storage gateway outage or propagation delay. |
+| Rate limiting or temporary upstream unavailability. |
+| Objects that were committed on-chain but are not yet retrievable from storage. |
+
+Verifier MUST NOT sign a failing report solely because required inputs are
+temporarily unavailable.
 
 Verifier MAY sign a failing report when all required inputs are available and
 the failure is semantic or cryptographic, such as:
@@ -107,6 +122,27 @@ else:
   task.status = REFUNDED
   transfer escrow to buyer
 ```
+
+## Timeout Refund Paths
+
+The settlement contract MUST also expose bounded timeout exits:
+
+```text
+refundAfterProofSubmissionDeadline:
+  require(task.status == FUNDED)
+  require(block.timestamp > task.deadline + proofSubmissionGracePeriod)
+  refund escrow to buyer
+  task.status = REFUNDED
+
+refundAfterVerificationTimeout:
+  require(task.status == PROOF_SUBMITTED)
+  require(block.timestamp > task.proofSubmittedAt + verificationTimeout)
+  refund escrow to buyer
+  task.status = REFUNDED
+```
+
+`proofSubmissionGracePeriod` exists to allow execution that finished before
+`deadline` to be uploaded, stored, and submitted slightly later.
 
 ## Verifier Consumption Timing
 

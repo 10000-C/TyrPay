@@ -76,7 +76,7 @@ Created by Buyer and materialized by the settlement contract.
 | `seller` | `Address` | Yes | Expected Seller wallet. |
 | `token` | `Address` | Yes | ERC-20 token. Native token support is out of scope for M0. |
 | `amount` | `UIntString` | Yes | Escrow amount in token base units. |
-| `deadline` | `UnixMillis` | Yes | Last valid proof timestamp. |
+| `deadline` | `UnixMillis` | Yes | Last valid execution timestamp for `DeliveryReceipt.observedAt`. It is not the proof bundle submission deadline. |
 | `metadataHash` | `Bytes32` | No | Hash of optional task metadata. |
 | `metadataURI` | `URI` | No | URI of optional task metadata. |
 
@@ -143,7 +143,7 @@ Standardized receipt produced by zkTLS adapter.
 |---|---|---|---|
 | `schemaVersion` | string | Yes | `"fulfillpay.delivery-receipt.v1"` |
 | `taskContext` | `TaskContext` | Yes | Must match task and commitment. |
-| `callIndex` | number | Yes | Must be unique within bundle. |
+| `callIndex` | number | Yes | Must be unique within bundle. Duplicate `callIndex` values MUST be rejected in Phase 1. |
 | `callIntentHash` | `Bytes32` | Yes | Hash of `CallIntent`. |
 | `provider` | string | Yes | Example: `"mock"` or `"reclaim"`. |
 | `providerProofId` | string | Yes | Provider-level proof or claim identifier. |
@@ -170,7 +170,7 @@ Seller-submitted aggregate of receipts.
 | `receipts` | `DeliveryReceipt[]` | Yes | Non-empty list. |
 | `aggregateUsage` | object | Yes | Aggregated usage claimed by Seller SDK. |
 | `aggregateUsage.totalTokens` | number | Yes | Sum of receipt usage. |
-| `createdAt` | `UnixMillis` | Yes | Bundle creation time. |
+| `createdAt` | `UnixMillis` | Yes | Bundle creation time. This MAY be later than `TaskIntent.deadline` if execution completed before `deadline` and the bundle is submitted within the contract-defined proof submission grace period. |
 
 ## VerificationReport
 
@@ -211,9 +211,8 @@ REFUNDED
 ```
 
 SDKs MAY expose `EXECUTING`, `VERIFIED_PASS`, and `VERIFIED_FAIL` as derived
-statuses. SDKs MAY also expose `EXPIRED` for unfunded tasks whose deadline or
-acceptance window has passed. Derived values MUST NOT be required for contract
-safety.
+statuses. SDKs MAY also expose `EXPIRED` for unfunded tasks whose `deadline`
+has passed. Derived values MUST NOT be required for contract safety.
 
 ## SettlementAction
 

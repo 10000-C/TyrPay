@@ -60,8 +60,9 @@ Each fixture SHOULD use:
 | `receipt.model-mismatch.json` | `modelMatched=false`. |
 | `receipt.timestamp-before-funded.json` | `withinTaskWindow=false`. |
 | `receipt.timestamp-after-deadline.json` | `withinTaskWindow=false`. |
+| `proof-bundle.submitted-within-grace.json` | Valid execution before `deadline`, valid submission during proof submission grace period. |
 | `proof-bundle.usage-insufficient.json` | `usageSatisfied=false`. |
-| `proof-bundle.duplicate-receipt.json` | Verifier rejects or fails proof consumption. |
+| `proof-bundle.duplicate-call-index.json` | Verifier rejects bundle because `callIndicesUnique=false`. |
 | `verification-report.bad-verifier.json` | Contract rejects signature. |
 | `verification-report.wrong-chain.json` | Contract rejects EIP-712 domain. |
 | `verification-report.wrong-contract.json` | Contract rejects EIP-712 domain. |
@@ -91,5 +92,7 @@ M0 is complete when:
 | At least one full PASS scenario links all object hashes end to end. |
 | At least one FAIL scenario covers model mismatch. |
 | At least one FAIL scenario covers insufficient usage. |
+| At least one PASS or FAIL scenario covers execution before `deadline` with proof submission during the grace period. |
+| At least one FAIL scenario covers duplicate `callIndex`. |
 | At least one replay scenario covers duplicate `proofBundleHash`. |
 | TypeScript SDK Core and Solidity tests consume the same vectors. |
