@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import type { ProofBundle } from "@fulfillpay/sdk-core";
 
-import { LocalStorageAdapter, MemoryStorageAdapter, ZeroGStorageAdapter, type ZeroGStorageTransport } from "../src/index.js";
+import {
+  LocalStorageAdapter,
+  MemoryStorageAdapter,
+  StorageConfigurationError,
+  StorageIntegrityError,
+  ZeroGStorageAdapter,
+  type ZeroGStorageTransport
+} from "../src/index.js";
 
 interface FixtureFile<T> {
   object: T;
@@ -32,6 +39,23 @@ test("memory adapter stores and retrieves canonical proof bundles with a stable 
   assert.deepEqual(restored, fixture.object);
 });
 
+test("memory adapter detects in-memory tampering before returning stored objects", async () => {
+  const fixture = loadFixture<ProofBundle>("test/fixtures/protocol/proof-bundles/proof-bundle.pass-basic.json");
+  const adapter = new MemoryStorageAdapter();
+  const pointer = await adapter.putObject(fixture.object, { namespace: "proof-bundles" });
+
+  const store = adapter as unknown as {
+    store: Map<string, { canonical: string; hash: string }>;
+  };
+
+  store.store.set(pointer.uri, {
+    canonical: JSON.stringify({ tampered: true }),
+    hash: pointer.hash
+  });
+
+  await assert.rejects(() => adapter.getObject(pointer), StorageIntegrityError);
+});
+
 test("local adapter persists payloads under file URIs and reloads them with hash verification", async () => {
   const fixture = loadFixture<ProofBundle>("test/fixtures/protocol/proof-bundles/proof-bundle.pass-basic.json");
   const baseDirectory = await mkdtemp(path.join(tmpdir(), "fulfillpay-storage-"));
@@ -44,6 +68,23 @@ test("local adapter persists payloads under file URIs and reloads them with hash
     assert.equal(pointer.hash, fixture.hash);
     assert.match(pointer.uri, /^file:\/\//);
     assert.deepEqual(restored, fixture.object);
+  } finally {
+    await rm(baseDirectory, { recursive: true, force: true });
+  }
+});
+
+test("local adapter rejects tampered files", async () => {
+  const fixture = loadFixture<ProofBundle>("test/fixtures/protocol/proof-bundles/proof-bundle.pass-basic.json");
+  const baseDirectory = await mkdtemp(path.join(tmpdir(), "fulfillpay-storage-"));
+  const adapter = new LocalStorageAdapter({ baseDirectory });
+
+  try {
+    const pointer = await adapter.putObject(fixture.object, { namespace: "proof-bundles" });
+    const filePath = new URL(pointer.uri);
+
+    await writeFile(filePath, JSON.stringify({ tampered: true }), "utf8");
+
+    await assert.rejects(() => adapter.getObject(pointer), StorageIntegrityError);
   } finally {
     await rm(baseDirectory, { recursive: true, force: true });
   }
@@ -76,4 +117,11 @@ test("zero-g adapter preserves the storage adapter contract through an injected 
   assert.equal(pointer.hash, fixture.hash);
   assert.equal(pointer.uri, `0g://storage/proof-bundles/${fixture.hash}.json`);
   assert.deepEqual(restored, fixture.object);
+});
+
+test("zero-g adapter fails fast when no transport is configured", async () => {
+  const fixture = loadFixture<ProofBundle>("test/fixtures/protocol/proof-bundles/proof-bundle.pass-basic.json");
+  const adapter = new ZeroGStorageAdapter();
+
+  await assert.rejects(() => adapter.putObject(fixture.object), StorageConfigurationError);
 });
