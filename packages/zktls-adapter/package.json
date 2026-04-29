@@ -9,5 +9,11 @@
     "build": "tsc -p tsconfig.json",
     "test": "echo \"zktls-adapter tests pending\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fulfillpay/sdk-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30"
   }
 }
