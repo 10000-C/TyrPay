@@ -21,7 +21,8 @@ import {
   type ProofBundle,
   type TaskContext,
   type TaskIntent,
-  type UnsignedVerificationReport
+  type UnsignedVerificationReport,
+  type VerificationReport
 } from "../types/index.js";
 
 export interface HashObjectOptions {
@@ -92,9 +93,10 @@ export function hashProofBundle(input: ProofBundle): Bytes32 {
   return hashObject(input);
 }
 
-export function hashVerificationReport(input: UnsignedVerificationReport): Bytes32 {
-  assertUnsignedVerificationReport(input);
-  return hashObject(input, { excludeTopLevelKeys: ["reportHash", "signature"] });
+export function hashVerificationReport(input: UnsignedVerificationReport | VerificationReport): Bytes32 {
+  const unsignedReport = toUnsignedVerificationReport(input);
+  assertUnsignedVerificationReport(unsignedReport);
+  return hashObject(unsignedReport, { excludeTopLevelKeys: ["reportHash", "signature"] });
 }
 
 function omitTopLevelKeys(input: unknown, excludedKeys: string[] | undefined): unknown {
@@ -109,6 +111,13 @@ function omitTopLevelKeys(input: unknown, excludedKeys: string[] | undefined): u
 
 function isTaskContext(value: TaskContext | BuildTaskContextInput): value is TaskContext {
   return isProtocolSchemaObject(value);
+}
+
+function toUnsignedVerificationReport(
+  report: UnsignedVerificationReport | VerificationReport
+): UnsignedVerificationReport {
+  const { signature: _signature, ...unsignedReport } = report;
+  return unsignedReport;
 }
 
 function isProtocolSchemaObject(value: unknown): value is { schemaVersion: string } {
