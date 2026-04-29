@@ -29,6 +29,7 @@ type ReportInput = {
   settlementAction: number;
   settlementAmount: bigint;
   verifiedAt: bigint;
+  reportHash: string;
 };
 
 async function main() {
@@ -56,6 +57,9 @@ async function main() {
   if (!(await verifierRegistry.isVerifier(verifier.address))) {
     await (await verifierRegistry.addVerifier(verifier.address)).wait();
   }
+  if (!(await settlement.allowedTokens(deployments.mockToken))) {
+    await (await settlement.setAllowedToken(deployments.mockToken, true)).wait();
+  }
 
   await (await mockToken.mint(buyer.address, 5_000_000n)).wait();
   await (await mockToken.connect(buyer).approve(settlementAddress, 5_000_000n)).wait();
@@ -81,10 +85,11 @@ async function main() {
     passed: true,
     settlementAction: 1,
     settlementAmount: 1_000_000n,
-    verifiedAt: await settlement.currentTimeMs()
+    verifiedAt: await settlement.currentTimeMs(),
+    reportHash: ethers.keccak256(ethers.toUtf8Bytes("smoke/pass/report"))
   };
   const passSignature = await signReport(verifier, settlementAddress, chainId, passReport);
-  await (await settlement.settle(passReport, passSignature, ethers.keccak256(ethers.toUtf8Bytes("smoke/pass/report")))).wait();
+  await (await settlement.settle(passReport, passSignature)).wait();
   const sellerBalanceAfterPass = await mockToken.balanceOf(seller.address);
   console.log(`PASS flow settled. Seller balance is now ${sellerBalanceAfterPass.toString()}.`);
 
@@ -108,10 +113,11 @@ async function main() {
     passed: false,
     settlementAction: 2,
     settlementAmount: 1_000_000n,
-    verifiedAt: await settlement.currentTimeMs()
+    verifiedAt: await settlement.currentTimeMs(),
+    reportHash: ethers.keccak256(ethers.toUtf8Bytes("smoke/fail/report"))
   };
   const failSignature = await signReport(verifier, settlementAddress, chainId, failReport);
-  await (await settlement.settle(failReport, failSignature, ethers.keccak256(ethers.toUtf8Bytes("smoke/fail/report")))).wait();
+  await (await settlement.settle(failReport, failSignature)).wait();
   const refundedTask = await settlement.getTask(failTask.taskId);
   console.log(`FAIL flow refunded. Task status is ${refundedTask.status.toString()}.`);
 
@@ -211,7 +217,8 @@ async function signReport(
         { name: "passed", type: "bool" },
         { name: "settlementAction", type: "uint8" },
         { name: "settlementAmount", type: "uint256" },
-        { name: "verifiedAt", type: "uint256" }
+        { name: "verifiedAt", type: "uint256" },
+        { name: "reportHash", type: "bytes32" }
       ]
     },
     report

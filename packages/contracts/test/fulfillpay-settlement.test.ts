@@ -31,6 +31,7 @@ type VectorFile = {
     settlementAction: number;
     settlementAmount: string;
     verifiedAt: string;
+    reportHash: string;
   };
   typeHashes: {
     domainSeparator: string;
@@ -82,6 +83,7 @@ async function deployFixture() {
   const mockToken = (await mockTokenFactory.deploy("FulfillPay Mock USD", "fpUSD", owner.address, 0)) as MockERC20;
   await mockToken.waitForDeployment();
   const settlementAddress = await addressOf(settlement);
+  await settlement.setAllowedToken(await addressOf(mockToken), true);
 
   await mockToken.mint(buyer.address, 10_000_000n);
   await mockToken.connect(buyer).approve(settlementAddress, 10_000_000n);
@@ -180,6 +182,7 @@ async function signReport(
     settlementAction: number;
     settlementAmount: bigint;
     verifiedAt: bigint;
+    reportHash: string;
   }
 ) {
   return verifier.signTypedData(
@@ -199,7 +202,8 @@ async function signReport(
         { name: "passed", type: "bool" },
         { name: "settlementAction", type: "uint8" },
         { name: "settlementAmount", type: "uint256" },
-        { name: "verifiedAt", type: "uint256" }
+        { name: "verifiedAt", type: "uint256" },
+        { name: "reportHash", type: "bytes32" }
       ]
     },
     report
@@ -222,7 +226,8 @@ describe("FulfillPaySettlement", function () {
         { name: "passed", type: "bool" },
         { name: "settlementAction", type: "uint8" },
         { name: "settlementAmount", type: "uint256" },
-        { name: "verifiedAt", type: "uint256" }
+        { name: "verifiedAt", type: "uint256" },
+        { name: "reportHash", type: "bytes32" }
       ]
     };
 
@@ -284,12 +289,12 @@ describe("FulfillPaySettlement", function () {
       passed: true,
       settlementAction: 1,
       settlementAmount: 1_000_000n,
-      verifiedAt
+      verifiedAt,
+      reportHash: ethers.keccak256(ethers.toUtf8Bytes("report/pass"))
     };
     const signature = await signReport(task.verifier, settlementAddress, chainId, report);
 
-    await expect(task.settlement.settle(report, signature, ethers.keccak256(ethers.toUtf8Bytes("report/pass"))))
-      .to.emit(task.settlement, "TaskSettled");
+    await expect(task.settlement.settle(report, signature)).to.emit(task.settlement, "TaskSettled");
 
     const storedTask = await task.settlement.getTask(task.taskId);
     expect(storedTask.status).to.equal(4n);
@@ -315,14 +320,12 @@ describe("FulfillPaySettlement", function () {
       passed: false,
       settlementAction: 2,
       settlementAmount: 1_000_000n,
-      verifiedAt: BigInt(await task.settlement.currentTimeMs())
+      verifiedAt: BigInt(await task.settlement.currentTimeMs()),
+      reportHash: hashVector.hashes.verificationReportHash
     };
     const signature = await signReport(task.verifier, await addressOf(task.settlement), chainId, report);
 
-    await expect(task.settlement.settle(report, signature, hashVector.hashes.verificationReportHash)).to.emit(
-      task.settlement,
-      "TaskRefunded"
-    );
+    await expect(task.settlement.settle(report, signature)).to.emit(task.settlement, "TaskRefunded");
 
     const storedTask = await task.settlement.getTask(task.taskId);
     expect(storedTask.commitmentHash).to.equal(hashVector.hashes.commitmentHash);
@@ -388,7 +391,8 @@ describe("FulfillPaySettlement", function () {
       passed: true,
       settlementAction: 1,
       settlementAmount: 1_000_000n,
-      verifiedAt: BigInt(await fixture.settlement.currentTimeMs())
+      verifiedAt: BigInt(await fixture.settlement.currentTimeMs()),
+      reportHash: ethers.keccak256(ethers.toUtf8Bytes("report"))
     };
     const signature = await signReport(
       fixture.verifier,
@@ -398,7 +402,7 @@ describe("FulfillPaySettlement", function () {
     );
 
     await expect(
-      fixture.settlement.settle(report, signature, ethers.keccak256(ethers.toUtf8Bytes("report")))
+      fixture.settlement.settle(report, signature)
     ).to.be.revertedWithCustomError(fixture.settlement, "InvalidTaskState");
   });
 
@@ -414,12 +418,13 @@ describe("FulfillPaySettlement", function () {
       passed: false,
       settlementAction: 2,
       settlementAmount: 1_000_000n,
-      verifiedAt: BigInt(await task.settlement.currentTimeMs())
+      verifiedAt: BigInt(await task.settlement.currentTimeMs()),
+      reportHash: ethers.keccak256(ethers.toUtf8Bytes("report/unauthorized"))
     };
     const signature = await signReport(task.outsider, await addressOf(task.settlement), chainId, report);
 
     await expect(
-      task.settlement.settle(report, signature, ethers.keccak256(ethers.toUtf8Bytes("report/unauthorized")))
+      task.settlement.settle(report, signature)
     ).to.be.revertedWithCustomError(task.settlement, "UnauthorizedVerifier");
 
     const storedTask = await task.settlement.getTask(task.taskId);
@@ -442,7 +447,8 @@ describe("FulfillPaySettlement", function () {
       passed: true,
       settlementAction: 1,
       settlementAmount: 1_000_000n,
-      verifiedAt: BigInt(await firstTask.settlement.currentTimeMs())
+      verifiedAt: BigInt(await firstTask.settlement.currentTimeMs()),
+      reportHash: ethers.keccak256(ethers.toUtf8Bytes("report/one"))
     };
     const chainId = (await ethers.provider.getNetwork()).chainId;
     const signatureOne = await signReport(
@@ -451,7 +457,7 @@ describe("FulfillPaySettlement", function () {
       chainId,
       reportOne
     );
-    await firstTask.settlement.settle(reportOne, signatureOne, ethers.keccak256(ethers.toUtf8Bytes("report/one")));
+    await firstTask.settlement.settle(reportOne, signatureOne);
 
     const secondTask = await createFundedTaskOnFixture(fixture);
     await secondTask.settlement
@@ -467,7 +473,8 @@ describe("FulfillPaySettlement", function () {
       passed: false,
       settlementAction: 2,
       settlementAmount: 1_000_000n,
-      verifiedAt: BigInt(await secondTask.settlement.currentTimeMs())
+      verifiedAt: BigInt(await secondTask.settlement.currentTimeMs()),
+      reportHash: ethers.keccak256(ethers.toUtf8Bytes("report/two"))
     };
     const signatureTwo = await signReport(
       secondTask.verifier,
@@ -477,7 +484,7 @@ describe("FulfillPaySettlement", function () {
     );
 
     await expect(
-      secondTask.settlement.settle(reportTwo, signatureTwo, ethers.keccak256(ethers.toUtf8Bytes("report/two")))
+      secondTask.settlement.settle(reportTwo, signatureTwo)
     ).to.be.revertedWithCustomError(secondTask.settlement, "ProofBundleAlreadyUsed");
   });
 

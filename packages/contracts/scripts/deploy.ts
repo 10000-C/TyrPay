@@ -5,6 +5,10 @@ import { ethers, network } from "hardhat";
 
 const DEFAULT_GRACE_PERIOD_MS = 15n * 60n * 1000n;
 const DEFAULT_VERIFICATION_TIMEOUT_MS = 60n * 60n * 1000n;
+const configuredAllowedTokens = (process.env.ALLOWED_TOKENS ?? "")
+  .split(",")
+  .map((token) => token.trim())
+  .filter(Boolean);
 
 async function main() {
   const [deployer] = await ethers.getSigners();
@@ -38,13 +42,22 @@ async function main() {
     mockTokenAddress = await mockToken.getAddress();
   }
 
+  const allowedTokens = [...configuredAllowedTokens];
+  if (mockTokenAddress) {
+    allowedTokens.push(mockTokenAddress);
+  }
+  for (const token of allowedTokens) {
+    await (await settlement.setAllowedToken(token, true)).wait();
+  }
+
   const output = {
     chainId: chainId.toString(),
     network: network.name,
     deployer: deployer.address,
     verifierRegistry: await verifierRegistry.getAddress(),
     settlement: await settlement.getAddress(),
-    mockToken: mockTokenAddress
+    mockToken: mockTokenAddress,
+    allowedTokens
   };
 
   const outputDir = path.join(__dirname, "..", "deployments");

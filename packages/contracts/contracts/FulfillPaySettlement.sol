@@ -5,12 +5,13 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 interface IVerifierRegistry {
     function isVerifier(address verifier) external view returns (bool);
 }
 
-contract FulfillPaySettlement is EIP712 {
+contract FulfillPaySettlement is EIP712, Ownable {
     using SafeERC20 for IERC20;
 
     string public constant EIP712_NAME = "FulfillPay";
@@ -21,7 +22,7 @@ contract FulfillPaySettlement is EIP712 {
 
     bytes32 public constant VERIFICATION_REPORT_TYPEHASH =
         keccak256(
-            "VerificationReport(bytes32 taskId,address buyer,address seller,bytes32 commitmentHash,bytes32 proofBundleHash,bool passed,uint8 settlementAction,uint256 settlementAmount,uint256 verifiedAt)"
+            "VerificationReport(bytes32 taskId,address buyer,address seller,bytes32 commitmentHash,bytes32 proofBundleHash,bool passed,uint8 settlementAction,uint256 settlementAmount,uint256 verifiedAt,bytes32 reportHash)"
         );
 
     enum TaskStatus {
@@ -63,6 +64,7 @@ contract FulfillPaySettlement is EIP712 {
         uint8 settlementAction;
         uint256 settlementAmount;
         uint256 verifiedAt;
+        bytes32 reportHash;
     }
 
     IVerifierRegistry public immutable verifierRegistry;
@@ -73,6 +75,7 @@ contract FulfillPaySettlement is EIP712 {
 
     mapping(bytes32 taskId => Task task) private tasks;
     mapping(bytes32 proofBundleHash => bool used) public usedProofBundleHash;
+    mapping(address token => bool allowed) public allowedTokens;
 
     event TaskIntentCreated(
         bytes32 indexed taskId,
@@ -102,6 +105,7 @@ contract FulfillPaySettlement is EIP712 {
         address verifier,
         uint256 refundedAtMs
     );
+    event TokenAllowed(address indexed token, bool allowed);
 
     error EmptyHash();
     error EmptyReportHash();
@@ -115,9 +119,11 @@ contract FulfillPaySettlement is EIP712 {
     error OnlySeller();
     error ProofBundleAlreadyUsed();
     error ProofSubmissionWindowClosed();
+    error ReportExpired();
     error TimeoutNotReached();
     error TaskExpired();
     error TaskNotFound();
+    error TokenNotAllowed();
     error UnauthorizedVerifier();
     error ZeroAddress();
     error ZeroAmount();
@@ -137,6 +143,15 @@ contract FulfillPaySettlement is EIP712 {
         verificationTimeoutMs = verificationTimeoutMs_;
     }
 
+    function setAllowedToken(address token, bool allowed) external onlyOwner {
+        if (token == address(0)) {
+            revert ZeroAddress();
+        }
+
+        allowedTokens[token] = allowed;
+        emit TokenAllowed(token, allowed);
+    }
+
     function createTaskIntent(
         address seller,
         address token,
@@ -147,6 +162,9 @@ contract FulfillPaySettlement is EIP712 {
     ) external returns (bytes32 taskId, bytes32 taskNonce) {
         if (seller == address(0) || token == address(0)) {
             revert ZeroAddress();
+        }
+        if (!allowedTokens[token]) {
+            revert TokenNotAllowed();
         }
         if (amount == 0) {
             revert ZeroAmount();
@@ -205,10 +223,18 @@ contract FulfillPaySettlement is EIP712 {
         if (msg.sender != task.buyer) {
             revert OnlyBuyer();
         }
+        if (!allowedTokens[task.token]) {
+            revert TokenNotAllowed();
+        }
+
+        uint256 nowMs = _currentTimeMs();
+        if (nowMs > task.deadlineMs) {
+            revert TaskExpired();
+        }
 
         IERC20(task.token).safeTransferFrom(msg.sender, address(this), task.amount);
 
-        task.fundedAtMs = _currentTimeMs();
+        task.fundedAtMs = nowMs;
         task.status = TaskStatus.FUNDED;
 
         emit TaskFunded(taskId, task.fundedAtMs);
@@ -240,12 +266,12 @@ contract FulfillPaySettlement is EIP712 {
         emit ProofBundleSubmitted(taskId, proofBundleHash, proofBundleURI);
     }
 
-    function settle(VerificationReport calldata report, bytes calldata signature, bytes32 reportHash) external {
+    function settle(VerificationReport calldata report, bytes calldata signature) external {
         Task storage task = _getExistingTask(report.taskId);
         if (task.status != TaskStatus.PROOF_SUBMITTED) {
             revert InvalidTaskState();
         }
-        if (reportHash == bytes32(0)) {
+        if (report.reportHash == bytes32(0)) {
             revert EmptyReportHash();
         }
         if (usedProofBundleHash[report.proofBundleHash]) {
@@ -260,6 +286,9 @@ contract FulfillPaySettlement is EIP712 {
         if (report.settlementAmount != task.amount) {
             revert InvalidSettlementAmount();
         }
+        if (report.verifiedAt > task.proofSubmittedAtMs + verificationTimeoutMs) {
+            revert ReportExpired();
+        }
         if (
             (report.passed && report.settlementAction != SETTLEMENT_ACTION_RELEASE)
                 || (!report.passed && report.settlementAction != SETTLEMENT_ACTION_REFUND)
@@ -273,18 +302,18 @@ contract FulfillPaySettlement is EIP712 {
         }
 
         usedProofBundleHash[report.proofBundleHash] = true;
-        task.reportHash = reportHash;
+        task.reportHash = report.reportHash;
 
         if (report.passed) {
             task.status = TaskStatus.SETTLED;
             task.settledAtMs = _currentTimeMs();
             IERC20(task.token).safeTransfer(task.seller, task.amount);
-            emit TaskSettled(task.taskId, task.proofBundleHash, reportHash, recoveredVerifier, task.settledAtMs);
+            emit TaskSettled(task.taskId, task.proofBundleHash, report.reportHash, recoveredVerifier, task.settledAtMs);
         } else {
             task.status = TaskStatus.REFUNDED;
             task.refundedAtMs = _currentTimeMs();
             IERC20(task.token).safeTransfer(task.buyer, task.amount);
-            emit TaskRefunded(task.taskId, task.proofBundleHash, reportHash, recoveredVerifier, task.refundedAtMs);
+            emit TaskRefunded(task.taskId, task.proofBundleHash, report.reportHash, recoveredVerifier, task.refundedAtMs);
         }
     }
 
@@ -352,7 +381,8 @@ contract FulfillPaySettlement is EIP712 {
                 report.passed,
                 report.settlementAction,
                 report.settlementAmount,
-                report.verifiedAt
+                report.verifiedAt,
+                report.reportHash
             )
         );
     }
