@@ -67,11 +67,27 @@ importers:
 
   packages/shared: {}
 
-  packages/storage-adapter: {}
+  packages/storage-adapter:
+    dependencies:
+      '@fulfillpay/sdk-core':
+        specifier: workspace:*
+        version: link:../sdk-core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.19.17
 
   packages/verifier-client: {}
 
-  packages/zktls-adapter: {}
+  packages/zktls-adapter:
+    dependencies:
+      '@fulfillpay/sdk-core':
+        specifier: workspace:*
+        version: link:../sdk-core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.19.17
 
 packages:
 
