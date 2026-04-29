@@ -17,7 +17,9 @@ test/
       receipts/
       proof-bundles/
       verification-reports/
-      vectors/
+  vectors/
+    hashing/
+    eip712/
 ```
 
 ## Fixture File Shape
@@ -47,7 +49,7 @@ Each fixture SHOULD use:
 | `call-intent.basic.json` | Valid call intent and `callIntentHash`. |
 | `receipt.mock.valid.json` | Valid mock zkTLS receipt. |
 | `proof-bundle.pass-basic.json` | One or more valid receipts satisfying usage. |
-| `verification-report.pass-basic.json` | Valid signed pass report. |
+| `verification-report.pass-basic.unsigned.json` | Unsigned pass report body used to derive `verificationReportHash` and the EIP-712 digest. |
 
 ## Required Negative Fixtures
 

@@ -1,0 +1,28 @@
+{
+  "name": "commitment.openai-compatible",
+  "objectType": "ExecutionCommitment",
+  "object": {
+    "schemaVersion": "fulfillpay.execution-commitment.v1",
+    "taskId": "0x5555555555555555555555555555555555555555555555555555555555555555",
+    "buyer": "0x1111111111111111111111111111111111111111",
+    "seller": "0x2222222222222222222222222222222222222222",
+    "target": {
+      "host": "api.openai.com",
+      "path": "/v1/chat/completions",
+      "method": "POST"
+    },
+    "allowedModels": [
+      "gpt-4o-mini"
+    ],
+    "minUsage": {
+      "totalTokens": 120
+    },
+    "deadline": "1735689600000",
+    "verifier": "0x7777777777777777777777777777777777777777",
+    "termsHash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "termsURI": "ipfs://fulfillpay/terms/basic"
+  },
+  "canonical": "{\"allowedModels\":[\"gpt-4o-mini\"],\"buyer\":\"0x1111111111111111111111111111111111111111\",\"deadline\":\"1735689600000\",\"minUsage\":{\"totalTokens\":120},\"schemaVersion\":\"fulfillpay.execution-commitment.v1\",\"seller\":\"0x2222222222222222222222222222222222222222\",\"target\":{\"host\":\"api.openai.com\",\"method\":\"POST\",\"path\":\"/v1/chat/completions\"},\"taskId\":\"0x5555555555555555555555555555555555555555555555555555555555555555\",\"termsHash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"termsURI\":\"ipfs://fulfillpay/terms/basic\",\"verifier\":\"0x7777777777777777777777777777777777777777\"}",
+  "hash": "0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a",
+  "notes": "Single-endpoint OpenAI-compatible commitment with one allowed model and a minimum token usage threshold."
+}

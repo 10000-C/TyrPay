@@ -1,0 +1,22 @@
+{
+  "name": "pass-basic",
+  "scenario": "Single-call passing task with one mock receipt and full release settlement.",
+  "hashes": {
+    "taskIntentHash": "0x3cabd998e069ab6b94aadf54065f52f4822d1f0b74b53b18003ec0bdc03a6990",
+    "taskContextHash": "0x1385f097d4a29a5e8268c6da90fc09848c035b8199f1b32d41c3a38f2d374207",
+    "commitmentHash": "0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a",
+    "callIntentHash": "0xddd7776ef8be07ac441076aefa5eb46859a31129311dbad6b8b72f864775d76b",
+    "receiptHash": "0xf819ac0b3dd7fb8e6a0921bbd3aa213c2a9861c1c3ecbcd8d6bbf5254e8774e3",
+    "proofBundleHash": "0xcb24838e336e57d8398dc543b2fa406471f724b26321ab4f3cce4814891de3d7",
+    "verificationReportHash": "0xc651276636791738328a0ce58cc3f52ef786f1ef1814144ea8a6857e31f0e715"
+  },
+  "fixtures": {
+    "taskIntent": "test/fixtures/protocol/task-intents/task-intent.basic.json",
+    "taskContext": "test/fixtures/protocol/task-contexts/task-context.basic.json",
+    "commitment": "test/fixtures/protocol/commitments/commitment.openai-compatible.json",
+    "callIntent": "test/fixtures/protocol/call-intents/call-intent.basic.json",
+    "receipt": "test/fixtures/protocol/receipts/receipt.mock.valid.json",
+    "proofBundle": "test/fixtures/protocol/proof-bundles/proof-bundle.pass-basic.json",
+    "verificationReportUnsigned": "test/fixtures/protocol/verification-reports/verification-report.pass-basic.unsigned.json"
+  }
+}

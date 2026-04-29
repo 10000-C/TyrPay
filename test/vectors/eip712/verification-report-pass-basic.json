@@ -1,0 +1,31 @@
+{
+  "name": "verification-report-pass-basic",
+  "scenario": "EIP-712 digest for the unsigned passing verification report in the basic Phase 1 task.",
+  "domain": {
+    "name": "FulfillPay",
+    "version": "1",
+    "chainId": "31337",
+    "verifyingContract": "0x4444444444444444444444444444444444444444"
+  },
+  "domainType": "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)",
+  "reportType": "VerificationReport(bytes32 taskId,address buyer,address seller,bytes32 commitmentHash,bytes32 proofBundleHash,bool passed,uint8 settlementAction,uint256 settlementAmount,uint256 verifiedAt)",
+  "message": {
+    "taskId": "0x5555555555555555555555555555555555555555555555555555555555555555",
+    "buyer": "0x1111111111111111111111111111111111111111",
+    "seller": "0x2222222222222222222222222222222222222222",
+    "commitmentHash": "0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a",
+    "proofBundleHash": "0xcb24838e336e57d8398dc543b2fa406471f724b26321ab4f3cce4814891de3d7",
+    "passed": true,
+    "settlementAction": 1,
+    "settlementAmount": "1000000",
+    "verifiedAt": "1735686900000"
+  },
+  "typeHashes": {
+    "nameHash": "0xe2c49266b3e4e9e046bed8bc623397e17a74c1a49d1e0037a065a7f8510a3c80",
+    "versionHash": "0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6",
+    "domainSeparator": "0x24b3aa9c4fe0856f88593c669f4845c91c217001e4dd664a60975b6d9342f55b",
+    "structHash": "0x59cae312930240554596306a4a795c7bd38128b3ce7ff40b2060c6559e12cf04",
+    "digest": "0x3caef0a0c90f1e159d09a4c10db502eb964a8f7049ba8ccb7d1b6f5de72e0c6e"
+  },
+  "fixture": "test/fixtures/protocol/verification-reports/verification-report.pass-basic.unsigned.json"
+}
