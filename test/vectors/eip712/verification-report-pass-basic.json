@@ -8,7 +8,7 @@
     "verifyingContract": "0x4444444444444444444444444444444444444444"
   },
   "domainType": "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)",
-  "reportType": "VerificationReport(bytes32 taskId,address buyer,address seller,bytes32 commitmentHash,bytes32 proofBundleHash,bool passed,uint8 settlementAction,uint256 settlementAmount,uint256 verifiedAt)",
+  "reportType": "VerificationReport(bytes32 taskId,address buyer,address seller,bytes32 commitmentHash,bytes32 proofBundleHash,bool passed,uint8 settlementAction,uint256 settlementAmount,uint256 verifiedAt,bytes32 reportHash)",
   "message": {
     "taskId": "0x5555555555555555555555555555555555555555555555555555555555555555",
     "buyer": "0x1111111111111111111111111111111111111111",
@@ -18,14 +18,15 @@
     "passed": true,
     "settlementAction": 1,
     "settlementAmount": "1000000",
-    "verifiedAt": "1735686900000"
+    "verifiedAt": "1735686900000",
+    "reportHash": "0xc651276636791738328a0ce58cc3f52ef786f1ef1814144ea8a6857e31f0e715"
   },
   "typeHashes": {
     "nameHash": "0xe2c49266b3e4e9e046bed8bc623397e17a74c1a49d1e0037a065a7f8510a3c80",
     "versionHash": "0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6",
     "domainSeparator": "0x24b3aa9c4fe0856f88593c669f4845c91c217001e4dd664a60975b6d9342f55b",
-    "structHash": "0x59cae312930240554596306a4a795c7bd38128b3ce7ff40b2060c6559e12cf04",
-    "digest": "0x3caef0a0c90f1e159d09a4c10db502eb964a8f7049ba8ccb7d1b6f5de72e0c6e"
+    "structHash": "0xd319f365b0afdf45f929b60581a6dc69ab72e5be9d79bc1e0e32e565f038d34f",
+    "digest": "0x689219a247fb2fda3c61a7f570712a2ec00ae94ea5cf24b8bfaa09e6d8ca3bdb"
   },
   "fixture": "test/fixtures/protocol/verification-reports/verification-report.pass-basic.unsigned.json"
 }

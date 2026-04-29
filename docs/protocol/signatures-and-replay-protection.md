@@ -31,6 +31,7 @@ struct VerificationReport {
   uint8 settlementAction;
   uint256 settlementAmount;
   uint256 verifiedAt;
+  bytes32 reportHash;
 }
 ```
 
