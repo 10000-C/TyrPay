@@ -3,8 +3,26 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "build": "echo \"contracts build pending\"",
-    "test": "echo \"contracts tests pending\"",
+    "build": "hardhat compile",
+    "clean": "hardhat clean",
+    "compile": "hardhat compile",
+    "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
+    "deploy:testnet": "hardhat run scripts/deploy.ts --network testnet",
+    "node": "hardhat node",
+    "smoke:local": "hardhat run scripts/smoke-local.ts --network localhost",
+    "test": "hardhat test",
+    "test:coverage": "hardhat coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^4.9.6",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.15.30",
+    "dotenv": "^16.5.0",
+    "ethers": "^6.16.0",
+    "hardhat": "^2.26.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
   }
 }

@@ -4,6 +4,13 @@
   "packageManager": "pnpm@10.0.0",
   "scripts": {
     "build": "turbo run build",
+    "contracts:clean": "corepack pnpm --filter @fulfillpay/contracts clean",
+    "contracts:compile": "corepack pnpm --filter @fulfillpay/contracts compile",
+    "contracts:deploy:local": "corepack pnpm --filter @fulfillpay/contracts deploy:local",
+    "contracts:deploy:testnet": "corepack pnpm --filter @fulfillpay/contracts deploy:testnet",
+    "contracts:node": "corepack pnpm --filter @fulfillpay/contracts node",
+    "contracts:test": "corepack pnpm --filter @fulfillpay/contracts test",
+    "contracts:typecheck": "corepack pnpm --filter @fulfillpay/contracts typecheck",
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint",
     "test": "turbo run test",
