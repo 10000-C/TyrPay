@@ -221,12 +221,19 @@ export class BuyerSdk {
 
   async fundTask(taskId: string, options: FundTaskOptions = {}): Promise<TransactionReceipt> {
     const normalizedTaskId = normalizeBytes32(taskId, "taskId");
-
-    if (options.validateCommitment) {
-      await this.validateCommitment(normalizedTaskId, options.validateCommitment);
-    }
+    await this.validateCommitment(normalizedTaskId, options.validateCommitment ?? {});
 
     const tx = await this.contract.fundTask(normalizedTaskId);
+    return waitForReceipt(tx);
+  }
+
+  async refundAfterProofSubmissionDeadline(taskId: string): Promise<TransactionReceipt> {
+    const tx = await this.contract.refundAfterProofSubmissionDeadline(normalizeBytes32(taskId, "taskId"));
+    return waitForReceipt(tx);
+  }
+
+  async refundAfterVerificationTimeout(taskId: string): Promise<TransactionReceipt> {
+    const tx = await this.contract.refundAfterVerificationTimeout(normalizeBytes32(taskId, "taskId"));
     return waitForReceipt(tx);
   }
 
@@ -239,19 +246,6 @@ export class BuyerSdk {
 
     if (task.status === "FUNDED") {
       return "EXECUTING";
-    }
-
-    if (task.status === "PROOF_SUBMITTED" && this.config.reportResolver && task.reportHash) {
-      const report = await this.config.reportResolver.getReport({
-        task,
-        taskId: task.taskId,
-        reportHash: task.reportHash
-      });
-
-      if (report) {
-        assertVerificationReport(report);
-        return report.passed ? "VERIFIED_PASS" : "VERIFIED_FAIL";
-      }
     }
 
     return task.status;

@@ -9,7 +9,7 @@ import {
 } from "@fulfillpay/sdk-core";
 import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
 
-import { BuyerSdk, BuyerSdkValidationError, type BuyerTask, type VerificationReportResolver } from "../dist/index.js";
+import { BuyerSdk, BuyerSdkConfigurationError, BuyerSdkValidationError, type BuyerTask, type VerificationReportResolver } from "../dist/index.js";
 
 class InMemoryReportResolver implements VerificationReportResolver {
   private readonly reports = new Map<string, VerificationReport>();
@@ -80,6 +80,34 @@ export async function runBuyerSdkIntegration(ethers: any) {
   });
 
   await exerciseExpiredDerivedStatus({
+    ethers,
+    buyerSdk,
+    storage,
+    settlement,
+    mockToken,
+    buyer,
+    seller,
+    verifier
+  });
+
+  await exerciseFundTaskRequiresCommitmentRead({
+    buyer,
+    settlement,
+    mockToken
+  });
+
+  await exerciseRefundAfterProofSubmissionDeadline({
+    ethers,
+    buyerSdk,
+    storage,
+    settlement,
+    mockToken,
+    buyer,
+    seller,
+    verifier
+  });
+
+  await exerciseRefundAfterVerificationTimeout({
     ethers,
     buyerSdk,
     storage,
@@ -325,4 +353,162 @@ async function exerciseExpiredDerivedStatus(input: {
   await input.ethers.provider.send("evm_mine", []);
 
   assert.equal(await input.buyerSdk.getTaskStatus(created.taskId), "EXPIRED");
+}
+
+async function exerciseFundTaskRequiresCommitmentRead(input: {
+  buyer: any;
+  settlement: any;
+  mockToken: any;
+}) {
+  const buyerSdkWithoutStorage = new BuyerSdk({
+    settlementAddress: await input.settlement.getAddress(),
+    signer: input.buyer
+  });
+  const deadlineMs = (await input.settlement.currentTimeMs()) + 60n * 60n * 1000n;
+  const created = await buyerSdkWithoutStorage.createTaskIntent({
+    seller: input.buyer.address,
+    token: await input.mockToken.getAddress(),
+    amount: 10n,
+    deadline: deadlineMs
+  });
+
+  await assert.rejects(() => buyerSdkWithoutStorage.fundTask(created.taskId), BuyerSdkConfigurationError);
+}
+
+async function exerciseRefundAfterProofSubmissionDeadline(input: {
+  ethers: any;
+  buyerSdk: BuyerSdk;
+  storage: MemoryStorageAdapter;
+  settlement: any;
+  mockToken: any;
+  buyer: any;
+  seller: any;
+  verifier: any;
+}) {
+  const deadlineMs = (await input.settlement.currentTimeMs()) + 60n * 60n * 1000n;
+  const created = await input.buyerSdk.createTaskIntent({
+    seller: input.seller.address,
+    token: await input.mockToken.getAddress(),
+    amount: 40_000n,
+    deadline: deadlineMs
+  });
+
+  const pointer = await submitValidCommitment({
+    storage: input.storage,
+    settlement: input.settlement,
+    taskId: created.taskId,
+    buyer: input.buyer,
+    seller: input.seller,
+    verifier: input.verifier,
+    deadlineMs,
+    targetPath: "/v1/chat/completions"
+  });
+
+  await input.buyerSdk.fundTask(created.taskId, {
+    validateCommitment: {
+      acceptedHosts: ["api.openai.com"],
+      acceptedPaths: ["/v1/chat/completions"],
+      acceptedMethods: ["POST"],
+      acceptedModels: ["gpt-4.1-mini"],
+      expectedVerifier: input.verifier.address
+    }
+  });
+  assert.equal(pointer.commitment.taskId, created.taskId);
+
+  await input.ethers.provider.send("evm_increaseTime", [76 * 60]);
+  await input.ethers.provider.send("evm_mine", []);
+  await input.buyerSdk.refundAfterProofSubmissionDeadline(created.taskId);
+
+  assert.equal(await input.buyerSdk.getTaskStatus(created.taskId), "REFUNDED");
+}
+
+async function exerciseRefundAfterVerificationTimeout(input: {
+  ethers: any;
+  buyerSdk: BuyerSdk;
+  storage: MemoryStorageAdapter;
+  settlement: any;
+  mockToken: any;
+  buyer: any;
+  seller: any;
+  verifier: any;
+}) {
+  const deadlineMs = (await input.settlement.currentTimeMs()) + 60n * 60n * 1000n;
+  const created = await input.buyerSdk.createTaskIntent({
+    seller: input.seller.address,
+    token: await input.mockToken.getAddress(),
+    amount: 50_000n,
+    deadline: deadlineMs
+  });
+
+  const pointer = await submitValidCommitment({
+    storage: input.storage,
+    settlement: input.settlement,
+    taskId: created.taskId,
+    buyer: input.buyer,
+    seller: input.seller,
+    verifier: input.verifier,
+    deadlineMs,
+    targetPath: "/v1/responses"
+  });
+
+  await input.buyerSdk.fundTask(created.taskId, {
+    validateCommitment: {
+      acceptedHosts: ["api.openai.com"],
+      acceptedPaths: ["/v1/responses"],
+      acceptedMethods: ["POST"],
+      acceptedModels: ["gpt-4.1-mini"],
+      expectedVerifier: input.verifier.address
+    }
+  });
+
+  const proofBundleHash = input.ethers.keccak256(input.ethers.toUtf8Bytes(`buyer-sdk/proof-bundle/timeout/${created.taskId}`));
+  await (
+    await input.settlement
+      .connect(input.seller)
+      .submitProofBundle(created.taskId, proofBundleHash, `ipfs://proof-bundles/${created.taskId}`)
+  ).wait();
+  assert.equal(pointer.commitment.taskId, created.taskId);
+
+  await input.ethers.provider.send("evm_increaseTime", [61 * 60]);
+  await input.ethers.provider.send("evm_mine", []);
+  await input.buyerSdk.refundAfterVerificationTimeout(created.taskId);
+
+  assert.equal(await input.buyerSdk.getTaskStatus(created.taskId), "REFUNDED");
+}
+
+async function submitValidCommitment(input: {
+  storage: MemoryStorageAdapter;
+  settlement: any;
+  taskId: `0x${string}`;
+  buyer: any;
+  seller: any;
+  verifier: any;
+  deadlineMs: bigint;
+  targetPath: string;
+}) {
+  const commitment: ExecutionCommitment = {
+    schemaVersion: SCHEMA_VERSIONS.executionCommitment,
+    taskId: input.taskId,
+    buyer: input.buyer.address.toLowerCase() as `0x${string}`,
+    seller: input.seller.address.toLowerCase() as `0x${string}`,
+    target: {
+      host: "api.openai.com",
+      path: input.targetPath,
+      method: "POST"
+    },
+    allowedModels: ["gpt-4.1-mini"],
+    minUsage: {
+      totalTokens: 1
+    },
+    deadline: input.deadlineMs.toString(),
+    verifier: input.verifier.address.toLowerCase() as `0x${string}`
+  };
+  const pointer = await input.storage.putObject(commitment, { namespace: "commitments" });
+
+  await (await input.settlement.connect(input.seller).submitCommitment(input.taskId, pointer.hash, pointer.uri)).wait();
+
+  return {
+    commitment,
+    pointer
+  };
 }
