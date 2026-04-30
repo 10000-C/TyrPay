@@ -19,6 +19,7 @@ import {
   type Bytes32,
   type DeliveryReceipt,
   type ExecutionCommitment,
+  type ExtractedReceiptFields,
   type ProofBundle,
   type TaskContext,
   type TaskStatus,
@@ -30,7 +31,14 @@ import {
   type VerificationReport
 } from "@fulfillpay/sdk-core";
 import type { StorageAdapter } from "@fulfillpay/storage-adapter";
-import type { ProviderProofContext, ZkTlsRequestEvidence } from "@fulfillpay/zktls-adapter";
+import {
+  hashRequestEvidence,
+  hashResponseEvidence,
+  type ProviderProofContext,
+  type ZkTlsRequestEvidence,
+  type ZkTlsResponseEvidence
+} from "@fulfillpay/zktls-adapter";
+import { Contract, type ContractRunner } from "ethers";
 
 export const REQUIRED_VERIFICATION_CHECKS = [
   "commitmentHashMatched",
@@ -80,12 +88,30 @@ export interface SettlementTaskReader {
   getTask(taskId: Bytes32): Promise<ChainTaskLike>;
   getChainId(): Promise<UIntLike>;
   getSettlementContractAddress(): Promise<string>;
-  isProofBundleConsumed?(proofBundleHash: Bytes32): Promise<boolean>;
+  isProofBundleConsumed(proofBundleHash: Bytes32): Promise<boolean>;
+  isVerifierAuthorized(verifier: Address): Promise<boolean>;
+  getProofSubmissionGracePeriod(): Promise<UIntLike>;
+  getVerificationTimeout(): Promise<UIntLike>;
 }
 
 export interface RawProofVerifier {
   readonly name: string;
   verifyRawProof(rawProof: unknown): Promise<boolean>;
+  extractReceiptEvidence?(rawProof: unknown): Promise<RawProofReceiptEvidence | null> | RawProofReceiptEvidence | null;
+}
+
+export interface RawProofReceiptEvidence {
+  provider: string;
+  providerProofId: string;
+  request: ZkTlsRequestEvidence;
+  response: ZkTlsResponseEvidence;
+  observedAt: UnixMillis;
+  extracted: ExtractedReceiptFields;
+}
+
+export interface ReceiptProofVerification {
+  receiptMatchesVerifiedRawProof: boolean;
+  evidence: RawProofReceiptEvidence | null;
 }
 
 export interface VerificationReportSigner {
@@ -113,8 +139,40 @@ export interface ProofConsumptionRecord {
 }
 
 export interface ProofConsumptionRegistry {
+  findAny(keys: ProofConsumptionKeys): Promise<ProofConsumptionRecord | null>;
   hasAny(keys: ProofConsumptionKeys): Promise<boolean>;
   markConsumed(keys: ProofConsumptionKeys, record: ProofConsumptionRecord): Promise<void>;
+}
+
+export type ProofConsumptionKeyType = "providerProofId" | "receiptHash" | "responseHash" | "callIntentHash";
+
+export interface PrismaProofConsumptionKeyCreateInput {
+  keyType: ProofConsumptionKeyType;
+  key: string;
+  taskId: Bytes32;
+  proofBundleHash: Bytes32;
+  reportHash: Bytes32;
+  passed: boolean;
+  verifiedAt: UnixMillis;
+}
+
+export interface PrismaProofConsumptionRegistryClient {
+  proofConsumptionKey: {
+    findFirst(args: {
+      where: { OR: Array<{ keyType: ProofConsumptionKeyType; key: string }> };
+      select?: Partial<Record<"id" | "taskId" | "proofBundleHash" | "reportHash" | "passed" | "verifiedAt", boolean>>;
+    }): Promise<PrismaProofConsumptionKeyRecord | null>;
+    createMany(args: { data: PrismaProofConsumptionKeyCreateInput[] }): Promise<unknown>;
+  };
+}
+
+export interface PrismaProofConsumptionKeyRecord {
+  id?: unknown;
+  taskId: string;
+  proofBundleHash: string;
+  reportHash: string;
+  passed: boolean;
+  verifiedAt: string;
 }
 
 export interface CentralizedVerifierOptions {
@@ -134,6 +192,8 @@ export interface VerifyTaskOptions {
 export interface VerificationInputs {
   chainId: UIntString;
   settlementContract: Address;
+  proofSubmissionGracePeriod: UIntString;
+  verificationTimeout: UIntString;
   task: OnChainTask;
   commitment: ExecutionCommitment;
   proofBundle: ProofBundle;
@@ -144,6 +204,7 @@ export interface VerificationEvaluation {
   checks: RequiredVerificationChecks;
   aggregateUsage: AggregateUsage;
   consumptionKeys: ProofConsumptionKeys;
+  existingConsumptionRecord: ProofConsumptionRecord | null;
 }
 
 export interface VerificationResult {
@@ -180,26 +241,193 @@ export class VerifierInvalidTaskStateError extends Error {
   }
 }
 
-export class InMemoryProofConsumptionRegistry implements ProofConsumptionRegistry {
-  private readonly providerProofIds = new Set<string>();
-  private readonly receiptHashes = new Set<Bytes32>();
-  private readonly responseHashes = new Set<Bytes32>();
-  private readonly callIntentHashes = new Set<Bytes32>();
+export class VerifierUnauthorizedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "VerifierUnauthorizedError";
+  }
+}
 
-  async hasAny(keys: ProofConsumptionKeys): Promise<boolean> {
-    return (
-      keys.providerProofIds.some((key) => this.providerProofIds.has(key)) ||
-      keys.receiptHashes.some((key) => this.receiptHashes.has(key)) ||
-      keys.responseHashes.some((key) => this.responseHashes.has(key)) ||
-      keys.callIntentHashes.some((key) => this.callIntentHashes.has(key))
-    );
+export class ProofAlreadyConsumedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProofAlreadyConsumedError";
+  }
+}
+
+const SETTLEMENT_READER_ABI = [
+  "function getTask(bytes32 taskId) view returns ((bytes32 taskId, bytes32 taskNonce, address buyer, address seller, address token, uint256 amount, uint256 deadlineMs, bytes32 commitmentHash, string commitmentURI, uint256 fundedAtMs, bytes32 proofBundleHash, string proofBundleURI, uint256 proofSubmittedAtMs, bytes32 reportHash, uint256 settledAtMs, uint256 refundedAtMs, uint8 status))",
+  "function usedProofBundleHash(bytes32 proofBundleHash) view returns (bool)",
+  "function verifierRegistry() view returns (address)",
+  "function proofSubmissionGracePeriodMs() view returns (uint256)",
+  "function verificationTimeoutMs() view returns (uint256)"
+] as const;
+
+const VERIFIER_REGISTRY_READER_ABI = ["function isVerifier(address verifier) view returns (bool)"] as const;
+
+export interface EthersSettlementTaskReaderOptions {
+  settlementAddress: string;
+  runner: ContractRunner;
+  chainId?: UIntLike;
+  verifierRegistryAddress?: string;
+}
+
+export class EthersSettlementTaskReader implements SettlementTaskReader {
+  private readonly settlement: Contract;
+
+  constructor(private readonly options: EthersSettlementTaskReaderOptions) {
+    this.settlement = new Contract(options.settlementAddress, SETTLEMENT_READER_ABI, options.runner);
   }
 
-  async markConsumed(keys: ProofConsumptionKeys): Promise<void> {
-    keys.providerProofIds.forEach((key) => this.providerProofIds.add(key));
-    keys.receiptHashes.forEach((key) => this.receiptHashes.add(key));
-    keys.responseHashes.forEach((key) => this.responseHashes.add(key));
-    keys.callIntentHashes.forEach((key) => this.callIntentHashes.add(key));
+  async getTask(taskId: Bytes32): Promise<OnChainTask> {
+    const task = await this.settlement.getTask(taskId);
+
+    return normalizeChainTask({
+      taskId: task.taskId,
+      taskNonce: task.taskNonce,
+      buyer: task.buyer,
+      seller: task.seller,
+      token: task.token,
+      amount: task.amount,
+      deadlineMs: task.deadlineMs,
+      commitmentHash: task.commitmentHash,
+      commitmentURI: task.commitmentURI,
+      fundedAtMs: task.fundedAtMs,
+      proofBundleHash: task.proofBundleHash,
+      proofBundleURI: task.proofBundleURI,
+      proofSubmittedAtMs: task.proofSubmittedAtMs,
+      status: task.status
+    });
+  }
+
+  async getChainId(): Promise<UIntString> {
+    if (this.options.chainId !== undefined) {
+      return normalizeUIntString(this.options.chainId, "chainId");
+    }
+
+    const provider = this.options.runner.provider;
+    if (!provider) {
+      throw new TypeError("EthersSettlementTaskReader requires options.chainId when runner.provider is unavailable.");
+    }
+
+    const network = await provider.getNetwork();
+    return normalizeUIntString(network.chainId, "chainId");
+  }
+
+  async getSettlementContractAddress(): Promise<Address> {
+    return normalizeAddress(await this.settlement.getAddress(), "settlementContract");
+  }
+
+  async isProofBundleConsumed(proofBundleHash: Bytes32): Promise<boolean> {
+    return Boolean(await this.settlement.usedProofBundleHash(proofBundleHash));
+  }
+
+  async isVerifierAuthorized(verifier: Address): Promise<boolean> {
+    const registryAddress =
+      this.options.verifierRegistryAddress ?? normalizeAddress(await this.settlement.verifierRegistry(), "verifierRegistry");
+    const registry = new Contract(registryAddress, VERIFIER_REGISTRY_READER_ABI, this.options.runner);
+
+    return Boolean(await registry.isVerifier(verifier));
+  }
+
+  async getProofSubmissionGracePeriod(): Promise<UIntString> {
+    return normalizeUIntString(await this.settlement.proofSubmissionGracePeriodMs(), "proofSubmissionGracePeriodMs");
+  }
+
+  async getVerificationTimeout(): Promise<UIntString> {
+    return normalizeUIntString(await this.settlement.verificationTimeoutMs(), "verificationTimeoutMs");
+  }
+}
+
+export class InMemoryProofConsumptionRegistry implements ProofConsumptionRegistry {
+  private readonly recordsByKey = new Map<string, ProofConsumptionRecord>();
+
+  async findAny(keys: ProofConsumptionKeys): Promise<ProofConsumptionRecord | null> {
+    for (const entry of flattenProofConsumptionKeys(keys)) {
+      const record = this.recordsByKey.get(toProofConsumptionKey(entry));
+      if (record) {
+        return record;
+      }
+    }
+
+    return null;
+  }
+
+  async hasAny(keys: ProofConsumptionKeys): Promise<boolean> {
+    return (await this.findAny(keys)) !== null;
+  }
+
+  async markConsumed(keys: ProofConsumptionKeys, record: ProofConsumptionRecord): Promise<void> {
+    if (hasDuplicateConsumptionKey(keys) || (await this.hasAny(keys))) {
+      throw new ProofAlreadyConsumedError("One or more proof consumption keys were already consumed.");
+    }
+
+    flattenProofConsumptionKeys(keys).forEach((entry) => this.recordsByKey.set(toProofConsumptionKey(entry), record));
+  }
+}
+
+export class PrismaProofConsumptionRegistry implements ProofConsumptionRegistry {
+  constructor(private readonly prisma: PrismaProofConsumptionRegistryClient) {}
+
+  async findAny(keys: ProofConsumptionKeys): Promise<ProofConsumptionRecord | null> {
+    const entries = flattenProofConsumptionKeys(keys);
+    if (entries.length === 0) {
+      return null;
+    }
+
+    const existing = await this.prisma.proofConsumptionKey.findFirst({
+      where: {
+        OR: entries
+      },
+      select: {
+        taskId: true,
+        proofBundleHash: true,
+        reportHash: true,
+        passed: true,
+        verifiedAt: true
+      }
+    });
+
+    if (!existing) {
+      return null;
+    }
+
+    return {
+      taskId: normalizeBytes32(existing.taskId, "proofConsumptionKey.taskId"),
+      proofBundleHash: normalizeBytes32(existing.proofBundleHash, "proofConsumptionKey.proofBundleHash"),
+      reportHash: normalizeBytes32(existing.reportHash, "proofConsumptionKey.reportHash"),
+      passed: existing.passed,
+      verifiedAt: normalizeUIntString(existing.verifiedAt, "proofConsumptionKey.verifiedAt") as UnixMillis
+    };
+  }
+
+  async hasAny(keys: ProofConsumptionKeys): Promise<boolean> {
+    return (await this.findAny(keys)) !== null;
+  }
+
+  async markConsumed(keys: ProofConsumptionKeys, record: ProofConsumptionRecord): Promise<void> {
+    if (hasDuplicateConsumptionKey(keys)) {
+      throw new ProofAlreadyConsumedError("Proof bundle contains duplicate proof consumption keys.");
+    }
+
+    if (await this.hasAny(keys)) {
+      throw new ProofAlreadyConsumedError("One or more proof consumption keys were already consumed.");
+    }
+
+    const data = flattenProofConsumptionKeys(keys).map((entry) => ({
+      ...entry,
+      taskId: record.taskId,
+      proofBundleHash: record.proofBundleHash,
+      reportHash: record.reportHash,
+      passed: record.passed,
+      verifiedAt: record.verifiedAt
+    }));
+
+    try {
+      await this.prisma.proofConsumptionKey.createMany({ data });
+    } catch (error) {
+      throw new ProofAlreadyConsumedError(`Unable to reserve proof consumption keys: ${toErrorMessage(error)}`);
+    }
   }
 }
 
@@ -222,11 +450,18 @@ export class CentralizedVerifier {
     const taskId = normalizeBytes32(taskIdInput, "taskId");
     const inputs = await this.loadInputs(taskId);
     const evaluation = await this.evaluate(inputs);
+
+    if (evaluation.existingConsumptionRecord !== null) {
+      throw new ProofAlreadyConsumedError(
+        `One or more proof consumption keys for task ${inputs.task.taskId} and bundle ${inputs.task.proofBundleHash} were already reserved by task ${evaluation.existingConsumptionRecord.taskId}, bundle ${evaluation.existingConsumptionRecord.proofBundleHash}, report ${evaluation.existingConsumptionRecord.reportHash}.`
+      );
+    }
+
     const unsignedReport = await this.buildUnsignedReport(inputs, evaluation);
     const report = await signVerificationReport(unsignedReport, this.options.signer);
 
     let consumed = false;
-    if (options.markProofsConsumed ?? true) {
+    if ((options.markProofsConsumed ?? true) && evaluation.checks.proofNotConsumed) {
       const reportHash = report.reportHash ?? hashVerificationReport(report);
       await this.consumptionRegistry.markConsumed(evaluation.consumptionKeys, {
         taskId: inputs.task.taskId,
@@ -247,15 +482,29 @@ export class CentralizedVerifier {
   }
 
   async loadInputs(taskId: Bytes32): Promise<VerificationInputs> {
-    const [chainId, settlementContract, taskLike] = await Promise.all([
+    const [chainId, settlementContract, proofSubmissionGracePeriod, verificationTimeout, taskLike] = await Promise.all([
       this.options.settlement.getChainId(),
       this.options.settlement.getSettlementContractAddress(),
+      this.options.settlement.getProofSubmissionGracePeriod(),
+      this.options.settlement.getVerificationTimeout(),
       this.options.settlement.getTask(taskId)
     ]);
     const task = normalizeChainTask(taskLike);
 
     if (task.status !== "PROOF_SUBMITTED") {
       throw new VerifierInvalidTaskStateError(`Task ${task.taskId} must be PROOF_SUBMITTED before verification.`);
+    }
+
+    const normalizedProofSubmissionGracePeriod = normalizeUIntString(
+      proofSubmissionGracePeriod,
+      "proofSubmissionGracePeriod"
+    );
+    const normalizedVerificationTimeout = normalizeUIntString(verificationTimeout, "verificationTimeout");
+    const proofSubmissionClosesAt = BigInt(task.deadline) + BigInt(normalizedProofSubmissionGracePeriod);
+    if (BigInt(task.proofSubmittedAt) > proofSubmissionClosesAt) {
+      throw new VerifierInvalidTaskStateError(
+        `Task ${task.taskId} proof submission is outside the configured grace period.`
+      );
     }
 
     const [commitment, proofBundle] = await Promise.all([
@@ -275,6 +524,8 @@ export class CentralizedVerifier {
     return {
       chainId: normalizeUIntString(chainId, "chainId"),
       settlementContract: normalizeAddress(settlementContract, "settlementContract"),
+      proofSubmissionGracePeriod: normalizedProofSubmissionGracePeriod,
+      verificationTimeout: normalizedVerificationTimeout,
       task,
       commitment,
       proofBundle,
@@ -285,16 +536,18 @@ export class CentralizedVerifier {
   async evaluate(inputs: VerificationInputs): Promise<VerificationEvaluation> {
     const { task, commitment, proofBundle, rawProofs } = inputs;
     const consumptionKeys = buildProofConsumptionKeys(proofBundle);
-    const aggregateUsage = aggregateReceiptUsage(proofBundle.receipts);
-    const proofBundleAlreadyConsumed = await this.options.settlement.isProofBundleConsumed?.(task.proofBundleHash);
+    const receiptProofs = await this.verifyReceiptProofs(proofBundle.receipts, rawProofs);
+    const aggregateUsage = aggregateAcceptedUsage(receiptProofs);
+    const existingConsumptionRecord = await this.consumptionRegistry.findAny(consumptionKeys);
+    const proofBundleAlreadyConsumed = await this.options.settlement.isProofBundleConsumed(task.proofBundleHash);
     const expectedTaskContext = buildExpectedTaskContext(inputs);
 
     const checks: RequiredVerificationChecks = {
       commitmentHashMatched: hashExecutionCommitment(commitment) === task.commitmentHash,
       proofBundleHashMatched: hashProofBundle(proofBundle) === task.proofBundleHash,
-      zkTlsProofValid: await this.areZkTlsProofsValid(proofBundle.receipts, rawProofs),
-      endpointMatched: proofBundle.receipts.every((receipt, index) =>
-        isEndpointMatched(commitment, rawProofs[index], receipt)
+      zkTlsProofValid: receiptProofs.every((proof) => proof.receiptMatchesVerifiedRawProof),
+      endpointMatched: receiptProofs.every(
+        (proof) => hasAcceptedReceiptEvidence(proof) && isEndpointMatched(commitment, proof.evidence)
       ),
       taskContextMatched:
         isCommitmentBoundToTask(commitment, task) &&
@@ -304,18 +557,24 @@ export class CentralizedVerifier {
         ),
       callIndicesUnique: hasUniqueValues(proofBundle.receipts.map((receipt) => receipt.callIndex)),
       proofNotConsumed:
-        !(await this.consumptionRegistry.hasAny(consumptionKeys)) &&
+        existingConsumptionRecord === null &&
         !hasDuplicateConsumptionKey(consumptionKeys) &&
         proofBundleAlreadyConsumed !== true,
-      withinTaskWindow: proofBundle.receipts.every((receipt) => isWithinTaskWindow(receipt, task, commitment)),
-      modelMatched: proofBundle.receipts.every((receipt) => commitment.allowedModels.includes(receipt.extracted.model)),
+      withinTaskWindow: receiptProofs.every((proof) =>
+        proof.evidence !== null && isWithinTaskWindow(proof.evidence.observedAt, task, commitment)
+      ),
+      modelMatched: receiptProofs.every(
+        (proof) =>
+          hasAcceptedReceiptEvidence(proof) && commitment.allowedModels.includes(proof.evidence.extracted.model)
+      ),
       usageSatisfied: aggregateUsage.totalTokens >= commitment.minUsage.totalTokens
     };
 
     return {
       checks,
       aggregateUsage,
-      consumptionKeys
+      consumptionKeys,
+      existingConsumptionRecord
     };
   }
 
@@ -327,6 +586,9 @@ export class CentralizedVerifier {
     const settlementAction = passed ? "RELEASE" : "REFUND";
     const verifier = await this.getVerifierAddress();
     const verifiedAt = normalizeUIntString(await this.clock(), "verifiedAt") as UnixMillis;
+
+    await this.assertVerifierCanSign(inputs, verifier, verifiedAt);
+
     const report: UnsignedVerificationReport = {
       schemaVersion: SCHEMA_VERSIONS.verificationReport,
       chainId: inputs.chainId,
@@ -351,28 +613,38 @@ export class CentralizedVerifier {
     return report;
   }
 
-  private async areZkTlsProofsValid(receipts: DeliveryReceipt[], rawProofs: unknown[]): Promise<boolean> {
-    const results = await Promise.all(
+  private async verifyReceiptProofs(
+    receipts: DeliveryReceipt[],
+    rawProofs: unknown[]
+  ): Promise<ReceiptProofVerification[]> {
+    return Promise.all(
       receipts.map(async (receipt, index) => {
         const adapter = this.zktlsAdapters.get(receipt.provider);
 
         if (!adapter) {
-          return false;
+          return {
+            receiptMatchesVerifiedRawProof: false,
+            evidence: null
+          };
         }
 
         try {
-          return (
-            hashObject(rawProofs[index]) === receipt.rawProofHash &&
-            extractProviderProofId(rawProofs[index]) === receipt.providerProofId &&
-            (await adapter.verifyRawProof(rawProofs[index]))
-          );
+          const rawProofHashMatched = hashObject(rawProofs[index]) === receipt.rawProofHash;
+          const rawProofVerified = rawProofHashMatched && (await adapter.verifyRawProof(rawProofs[index]));
+          const evidence = rawProofVerified ? await extractReceiptEvidence(adapter, rawProofs[index]) : null;
+
+          return {
+            receiptMatchesVerifiedRawProof: evidenceMatchesReceipt(evidence, receipt),
+            evidence
+          };
         } catch {
-          return false;
+          return {
+            receiptMatchesVerifiedRawProof: false,
+            evidence: null
+          };
         }
       })
     );
-
-    return results.every(Boolean);
   }
 
   private async getVerifierAddress(): Promise<Address> {
@@ -383,9 +655,28 @@ export class CentralizedVerifier {
     return normalizeAddress(await this.options.signer.getAddress(), "verifier");
   }
 
+  private async assertVerifierCanSign(inputs: VerificationInputs, verifier: Address, verifiedAt: UnixMillis): Promise<void> {
+    if (inputs.commitment.verifier !== verifier) {
+      throw new VerifierUnauthorizedError(
+        `Verifier ${verifier} is not the verifier assigned by the commitment (${inputs.commitment.verifier}).`
+      );
+    }
+
+    if (!(await this.options.settlement.isVerifierAuthorized(verifier))) {
+      throw new VerifierUnauthorizedError(`Verifier ${verifier} is not authorized by the verifier registry.`);
+    }
+
+    const expiresAt = BigInt(inputs.task.proofSubmittedAt) + BigInt(inputs.verificationTimeout);
+    if (BigInt(verifiedAt) > expiresAt) {
+      throw new VerifierInvalidTaskStateError(
+        `Task ${inputs.task.taskId} verification timeout expired before report generation.`
+      );
+    }
+  }
+
   private async loadStoredObject<T>(uri: URI, expectedHash: Bytes32, label: string): Promise<T> {
     try {
-      return await this.options.storage.getObject<T>(uri);
+      return await this.options.storage.getObject<T>(uri, { expectedHash });
     } catch (error) {
       if (isExpectedHashRequiredError(error)) {
         return this.options.storage.getObject<T>(uri, { expectedHash });
@@ -404,6 +695,13 @@ export async function signVerificationReport(
   report: UnsignedVerificationReport,
   signer: VerificationReportSigner
 ): Promise<VerificationReport> {
+  const signerAddress = normalizeAddress(await signer.getAddress(), "signer");
+  if (report.verifier !== signerAddress) {
+    throw new VerifierUnauthorizedError(
+      `VerificationReport.verifier ${report.verifier} does not match signer ${signerAddress}.`
+    );
+  }
+
   const reportWithHash: UnsignedVerificationReport = {
     ...report,
     reportHash: hashVerificationReport(report)
@@ -493,6 +791,106 @@ export function buildProofConsumptionKeys(proofBundle: ProofBundle): ProofConsum
   };
 }
 
+type AcceptedReceiptProofVerification = ReceiptProofVerification & {
+  receiptMatchesVerifiedRawProof: true;
+  evidence: RawProofReceiptEvidence;
+};
+
+function hasAcceptedReceiptEvidence(
+  proof: ReceiptProofVerification
+): proof is AcceptedReceiptProofVerification {
+  return proof.receiptMatchesVerifiedRawProof && proof.evidence !== null;
+}
+
+function evidenceMatchesReceipt(evidence: RawProofReceiptEvidence | null, receipt: DeliveryReceipt): boolean {
+  if (!evidence) {
+    return false;
+  }
+
+  try {
+    return (
+      evidence.provider === receipt.provider &&
+      evidence.providerProofId === receipt.providerProofId &&
+      hashRequestEvidence(evidence.request) === receipt.requestHash &&
+      hashResponseEvidence(evidence.response) === receipt.responseHash &&
+      evidence.observedAt === receipt.observedAt &&
+      extractedFieldsEqual(evidence.extracted, receipt.extracted)
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function extractReceiptEvidence(
+  adapter: RawProofVerifier,
+  rawProof: unknown
+): Promise<RawProofReceiptEvidence | null> {
+  if (adapter.extractReceiptEvidence) {
+    return adapter.extractReceiptEvidence(rawProof);
+  }
+
+  return extractCommonRawProofReceiptEvidence(rawProof);
+}
+
+function extractCommonRawProofReceiptEvidence(rawProof: unknown): RawProofReceiptEvidence | null {
+  if (!isRecord(rawProof)) {
+    return null;
+  }
+
+  const request = extractRequestEvidence(rawProof);
+  const response = extractResponseEvidence(rawProof);
+  const observedAt = extractObservedAt(rawProof);
+  const extracted = extractExtractedReceiptFields(rawProof);
+
+  if (
+    typeof rawProof.provider !== "string" ||
+    typeof rawProof.providerProofId !== "string" ||
+    !request ||
+    !response ||
+    !observedAt ||
+    !extracted
+  ) {
+    return null;
+  }
+
+  return {
+    provider: rawProof.provider,
+    providerProofId: rawProof.providerProofId,
+    request,
+    response,
+    observedAt,
+    extracted
+  };
+}
+
+function extractedFieldsEqual(left: ExtractedReceiptFields, right: ExtractedReceiptFields): boolean {
+  return left.model === right.model && left.usage.totalTokens === right.usage.totalTokens;
+}
+
+function flattenProofConsumptionKeys(keys: ProofConsumptionKeys): Array<{ keyType: ProofConsumptionKeyType; key: string }> {
+  const entries: Array<{ keyType: ProofConsumptionKeyType; key: string }> = [
+    ...keys.providerProofIds.map((key) => ({ keyType: "providerProofId" as const, key })),
+    ...keys.receiptHashes.map((key) => ({ keyType: "receiptHash" as const, key })),
+    ...keys.responseHashes.map((key) => ({ keyType: "responseHash" as const, key })),
+    ...keys.callIntentHashes.map((key) => ({ keyType: "callIntentHash" as const, key }))
+  ];
+  const seen = new Set<string>();
+
+  return entries.filter((entry) => {
+    const composite = `${entry.keyType}:${entry.key}`;
+    if (seen.has(composite)) {
+      return false;
+    }
+
+    seen.add(composite);
+    return true;
+  });
+}
+
+function toProofConsumptionKey(entry: { keyType: ProofConsumptionKeyType; key: string }): string {
+  return `${entry.keyType}:${entry.key}`;
+}
+
 function buildExpectedTaskContext(inputs: VerificationInputs): TaskContext {
   return {
     schemaVersion: SCHEMA_VERSIONS.taskContext,
@@ -508,9 +906,15 @@ function buildExpectedTaskContext(inputs: VerificationInputs): TaskContext {
   };
 }
 
-function aggregateReceiptUsage(receipts: DeliveryReceipt[]): AggregateUsage {
+function aggregateAcceptedUsage(receiptProofs: ReceiptProofVerification[]): AggregateUsage {
   return {
-    totalTokens: receipts.reduce((total, receipt) => total + receipt.extracted.usage.totalTokens, 0)
+    totalTokens: receiptProofs.reduce((total, proof) => {
+      if (!proof.receiptMatchesVerifiedRawProof || !proof.evidence) {
+        return total;
+      }
+
+      return total + proof.evidence.extracted.usage.totalTokens;
+    }, 0)
   };
 }
 
@@ -581,20 +985,22 @@ function taskContextsEqual(left: TaskContext, right: TaskContext): boolean {
   );
 }
 
-function isEndpointMatched(commitment: ExecutionCommitment, rawProof: unknown, receipt: DeliveryReceipt): boolean {
-  const request = extractRequestEvidence(rawProof);
+function isEndpointMatched(commitment: ExecutionCommitment, evidence: RawProofReceiptEvidence | null): boolean {
+  if (!evidence) {
+    return false;
+  }
 
+  const request = evidence.request;
   return (
-    request !== null &&
-    receipt.provider.length > 0 &&
+    evidence.provider.length > 0 &&
     request.host === commitment.target.host &&
     request.path === commitment.target.path &&
     request.method.toUpperCase() === commitment.target.method
   );
 }
 
-function isWithinTaskWindow(receipt: DeliveryReceipt, task: OnChainTask, commitment: ExecutionCommitment): boolean {
-  const observedAt = BigInt(receipt.observedAt);
+function isWithinTaskWindow(observedAtInput: UnixMillis, task: OnChainTask, commitment: ExecutionCommitment): boolean {
+  const observedAt = BigInt(observedAtInput);
   const fundedAt = BigInt(task.fundedAt);
   const deadline = minBigInt(BigInt(task.deadline), BigInt(commitment.deadline));
 
@@ -640,7 +1046,7 @@ function extractProviderProofContext(rawProof: unknown): ProviderProofContext | 
   return context as unknown as ProviderProofContext;
 }
 
-function extractRequestEvidence(rawProof: unknown): Pick<ZkTlsRequestEvidence, "host" | "path" | "method"> | null {
+function extractRequestEvidence(rawProof: unknown): ZkTlsRequestEvidence | null {
   if (!isRecord(rawProof) || !isRecord(rawProof.request)) {
     return null;
   }
@@ -650,19 +1056,100 @@ function extractRequestEvidence(rawProof: unknown): Pick<ZkTlsRequestEvidence, "
     return null;
   }
 
-  return {
-    host: request.host,
-    path: request.path,
-    method: request.method
-  };
-}
-
-function extractProviderProofId(rawProof: unknown): string | null {
-  if (!isRecord(rawProof) || typeof rawProof.providerProofId !== "string") {
+  const headers = request.headers === undefined ? undefined : extractStringRecord(request.headers);
+  if (request.headers !== undefined && !headers) {
     return null;
   }
 
-  return rawProof.providerProofId;
+  return {
+    host: request.host,
+    path: request.path,
+    method: request.method,
+    ...(headers ? { headers } : {}),
+    ...(Object.prototype.hasOwnProperty.call(request, "body") ? { body: request.body } : {})
+  };
+}
+
+function extractResponseEvidence(rawProof: unknown): ZkTlsResponseEvidence | null {
+  if (!isRecord(rawProof) || !isRecord(rawProof.response)) {
+    return null;
+  }
+
+  const response = rawProof.response;
+  if (
+    typeof response.status !== "number" ||
+    !Number.isSafeInteger(response.status) ||
+    response.status < 100 ||
+    response.status > 599 ||
+    !Object.prototype.hasOwnProperty.call(response, "body")
+  ) {
+    return null;
+  }
+
+  const headers = response.headers === undefined ? undefined : extractStringRecord(response.headers);
+  if (response.headers !== undefined && !headers) {
+    return null;
+  }
+
+  return {
+    status: response.status,
+    ...(headers ? { headers } : {}),
+    body: response.body
+  };
+}
+
+function extractObservedAt(rawProof: unknown): UnixMillis | null {
+  if (!isRecord(rawProof) || (typeof rawProof.observedAt !== "string" && typeof rawProof.observedAt !== "number")) {
+    return null;
+  }
+
+  try {
+    return normalizeUIntString(rawProof.observedAt, "rawProof.observedAt") as UnixMillis;
+  } catch {
+    return null;
+  }
+}
+
+function extractExtractedReceiptFields(rawProof: unknown): ExtractedReceiptFields | null {
+  if (!isRecord(rawProof) || !isRecord(rawProof.extracted)) {
+    return null;
+  }
+
+  const extracted = rawProof.extracted;
+  if (!isRecord(extracted.usage)) {
+    return null;
+  }
+
+  const usage = extracted.usage;
+  if (
+    typeof extracted.model !== "string" ||
+    extracted.model.length === 0 ||
+    typeof usage.totalTokens !== "number" ||
+    !Number.isSafeInteger(usage.totalTokens) ||
+    usage.totalTokens < 0
+  ) {
+    return null;
+  }
+
+  return {
+    model: extracted.model,
+    usage: {
+      totalTokens: usage.totalTokens
+    }
+  };
+}
+
+function extractStringRecord(value: unknown): Record<string, string> | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const entries = Object.entries(value);
+  if (entries.some(([key, nestedValue]) => !key || typeof nestedValue !== "string" || nestedValue.length === 0)) {
+    return null;
+  }
+
+  return Object.fromEntries(entries as Array<[string, string]>);
 }
 
 function readRequiredField(object: Record<string, unknown>, ...fieldNames: string[]): string {

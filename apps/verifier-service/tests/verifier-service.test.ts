@@ -17,12 +17,16 @@ import { MockZkTlsAdapter, type MockScenario } from "@fulfillpay/zktls-adapter";
 import { Wallet, verifyTypedData } from "ethers";
 
 import {
+  buildProofConsumptionKeys,
   CentralizedVerifier,
   InMemoryProofConsumptionRegistry,
+  PrismaProofConsumptionRegistry,
   REQUIRED_VERIFICATION_CHECKS,
   toSettlementReportStruct,
   type OnChainTask,
   type ProofConsumptionRegistry,
+  type PrismaProofConsumptionKeyCreateInput,
+  type PrismaProofConsumptionRegistryClient,
   type SettlementTaskReader
 } from "../src/index.js";
 
@@ -31,6 +35,9 @@ const SETTLEMENT_CONTRACT = "0x4444444444444444444444444444444444444444";
 const TASK_ID = "0x5555555555555555555555555555555555555555555555555555555555555555";
 const TASK_NONCE = "0x6666666666666666666666666666666666666666666666666666666666666666";
 const WRONG_TASK_NONCE = "0x7777777777777777777777777777777777777777777777777777777777777777";
+const OTHER_TASK_ID = "0x8888888888888888888888888888888888888888888888888888888888888888" as Bytes32;
+const OTHER_PROOF_BUNDLE_HASH =
+  "0x9999999999999999999999999999999999999999999999999999999999999999" as Bytes32;
 const BUYER = "0x1111111111111111111111111111111111111111";
 const SELLER = "0x2222222222222222222222222222222222222222";
 const TOKEN = "0x3333333333333333333333333333333333333333";
@@ -45,12 +52,23 @@ interface BuildFixtureOptions {
   observedAt?: string;
   mutateReceipt?: (receipt: DeliveryReceipt) => DeliveryReceipt;
   consumptionRegistry?: ProofConsumptionRegistry;
+  commitmentVerifier?: Address;
+  verifierAddress?: string;
+  verifierAuthorized?: boolean;
+  proofSubmittedAt?: string;
+  proofSubmissionGracePeriod?: string;
+  verificationTimeout?: string;
 }
 
 class MockSettlementReader implements SettlementTaskReader {
   proofBundleConsumed = false;
 
-  constructor(private readonly task: OnChainTask) {}
+  constructor(
+    private readonly task: OnChainTask,
+    private readonly verifierAuthorized = true,
+    private readonly proofSubmissionGracePeriod = "600000",
+    private readonly verificationTimeout = "600000"
+  ) {}
 
   async getTask(taskId: Bytes32): Promise<OnChainTask> {
     assert.equal(taskId, this.task.taskId);
@@ -69,6 +87,48 @@ class MockSettlementReader implements SettlementTaskReader {
     assert.equal(proofBundleHash, this.task.proofBundleHash);
     return this.proofBundleConsumed;
   }
+
+  async isVerifierAuthorized(_verifier: Address): Promise<boolean> {
+    return this.verifierAuthorized;
+  }
+
+  async getProofSubmissionGracePeriod(): Promise<string> {
+    return this.proofSubmissionGracePeriod;
+  }
+
+  async getVerificationTimeout(): Promise<string> {
+    return this.verificationTimeout;
+  }
+}
+
+class FakeProofConsumptionKeyDelegate {
+  readonly records: PrismaProofConsumptionKeyCreateInput[] = [];
+
+  async findFirst(args: {
+    where: { OR: Array<{ keyType: PrismaProofConsumptionKeyCreateInput["keyType"]; key: string }> };
+    select?: Record<string, boolean>;
+  }): Promise<PrismaProofConsumptionKeyCreateInput | null> {
+    return (
+      this.records.find((record) =>
+        args.where.OR.some((candidate) => candidate.keyType === record.keyType && candidate.key === record.key)
+      ) ?? null
+    );
+  }
+
+  async createMany(args: { data: PrismaProofConsumptionKeyCreateInput[] }): Promise<{ count: number }> {
+    for (const next of args.data) {
+      if (this.records.some((record) => record.keyType === next.keyType && record.key === next.key)) {
+        throw new Error("Unique constraint failed on proof consumption key.");
+      }
+    }
+
+    this.records.push(...args.data);
+    return { count: args.data.length };
+  }
+}
+
+class FakePrismaClient implements PrismaProofConsumptionRegistryClient {
+  readonly proofConsumptionKey = new FakeProofConsumptionKeyDelegate();
 }
 
 test("signs a passing verification report for contract settlement", async () => {
@@ -126,6 +186,32 @@ test("fails when the proof timestamp is outside the task window", async () => {
   assert.equal(result.checks.modelMatched, true);
 });
 
+test("allows proof submitted after deadline when receipts were observed before deadline", async () => {
+  const fixture = await buildFixture({
+    proofSubmittedAt: "1735689900000",
+    proofSubmissionGracePeriod: "600000"
+  });
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+
+  assert.equal(result.report.passed, true);
+  assert.equal(result.checks.withinTaskWindow, true);
+  assert.equal(result.report.settlement.action, "RELEASE");
+});
+
+test("fails late proof submitted within grace when receipt was observed after deadline", async () => {
+  const fixture = await buildFixture({
+    scenario: "timestamp_after_deadline",
+    proofSubmittedAt: "1735689900000",
+    proofSubmissionGracePeriod: "600000"
+  });
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+
+  assert.equal(result.report.passed, false);
+  assert.equal(result.checks.withinTaskWindow, false);
+  assert.equal(result.checks.zkTlsProofValid, true);
+  assert.equal(result.report.settlement.action, "REFUND");
+});
+
 test("fails when receipt context differs from the on-chain task", async () => {
   const fixture = await buildFixture({
     mutateReceipt: (receipt) => ({
@@ -150,10 +236,180 @@ test("rejects verifier-side proof replay after a report is produced", async () =
   const first = await fixture.verifier.verifyTask(fixture.task.taskId);
   assert.equal(first.report.passed, true);
 
-  const second = await fixture.verifier.verifyTask(fixture.task.taskId);
-  assert.equal(second.report.passed, false);
-  assert.equal(second.checks.proofNotConsumed, false);
-  assert.equal(second.report.settlement.action, "REFUND");
+  await assert.rejects(() => fixture.verifier.verifyTask(fixture.task.taskId), /already reserved/);
+});
+
+test("rejects proof replay when a consumption key belongs to another task", async () => {
+  const consumptionRegistry = new InMemoryProofConsumptionRegistry();
+  const fixture = await buildFixture({ consumptionRegistry });
+  const keys = buildProofConsumptionKeys(fixture.proofBundle);
+
+  await consumptionRegistry.markConsumed(keys, {
+    taskId: OTHER_TASK_ID,
+    proofBundleHash: OTHER_PROOF_BUNDLE_HASH,
+    reportHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as Bytes32,
+    passed: true,
+    verifiedAt: VERIFIED_AT
+  });
+
+  await assert.rejects(() => fixture.verifier.verifyTask(fixture.task.taskId), /already reserved by task/);
+});
+
+test("fails when receipt usage is inflated beyond the raw proof extraction", async () => {
+  const fixture = await buildFixture({
+    scenario: "usage_insufficient",
+    mutateReceipt: (receipt) => ({
+      ...receipt,
+      extracted: {
+        ...receipt.extracted,
+        usage: {
+          totalTokens: 120
+        }
+      }
+    })
+  });
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+
+  assert.equal(result.report.passed, false);
+  assert.equal(result.checks.zkTlsProofValid, false);
+  assert.equal(result.checks.usageSatisfied, false);
+  assert.equal(result.aggregateUsage.totalTokens, 0);
+  assert.equal(result.report.aggregateUsage.totalTokens, 0);
+});
+
+test("fails when receipt timestamp is changed away from the raw proof timestamp", async () => {
+  const fixture = await buildFixture({
+    scenario: "timestamp_after_deadline",
+    mutateReceipt: (receipt) => ({
+      ...receipt,
+      observedAt: "1735686000000"
+    })
+  });
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+
+  assert.equal(result.report.passed, false);
+  assert.equal(result.checks.zkTlsProofValid, false);
+  assert.equal(result.checks.withinTaskWindow, false);
+});
+
+test("fails when receipt response hash differs from the raw proof response", async () => {
+  const fixture = await buildFixture({
+    mutateReceipt: (receipt) => ({
+      ...receipt,
+      responseHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    })
+  });
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+
+  assert.equal(result.report.passed, false);
+  assert.equal(result.checks.zkTlsProofValid, false);
+});
+
+test("fails endpoint and model checks when receipt proof matching fails", async () => {
+  const fixture = await buildFixture({
+    scenario: "model_mismatch",
+    mutateReceipt: (receipt) => ({
+      ...receipt,
+      extracted: {
+        ...receipt.extracted,
+        model: "gpt-4o-mini"
+      }
+    })
+  });
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+
+  assert.equal(result.report.passed, false);
+  assert.equal(result.checks.zkTlsProofValid, false);
+  assert.equal(result.checks.modelMatched, false);
+  assert.equal(result.checks.endpointMatched, false);
+  assert.equal(result.aggregateUsage.totalTokens, 0);
+});
+
+test("fails endpoint and model checks when raw proof evidence is unavailable", async () => {
+  const fixture = await buildFixture({
+    mutateReceipt: (receipt) => ({
+      ...receipt,
+      provider: "unsupported"
+    })
+  });
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+
+  assert.equal(result.report.passed, false);
+  assert.equal(result.checks.zkTlsProofValid, false);
+  assert.equal(result.checks.endpointMatched, false);
+  assert.equal(result.checks.modelMatched, false);
+});
+
+test("rejects when the commitment assigns a different verifier", async () => {
+  const fixture = await buildFixture({
+    commitmentVerifier: "0x9999999999999999999999999999999999999999"
+  });
+
+  await assert.rejects(
+    () => fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false }),
+    /not the verifier assigned/
+  );
+});
+
+test("rejects when the signer is not registry authorized", async () => {
+  const fixture = await buildFixture({ verifierAuthorized: false });
+
+  await assert.rejects(
+    () => fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false }),
+    /not authorized/
+  );
+});
+
+test("rejects when the configured report verifier differs from the signer", async () => {
+  const configuredVerifier = "0x9999999999999999999999999999999999999999";
+  const fixture = await buildFixture({
+    commitmentVerifier: configuredVerifier,
+    verifierAddress: configuredVerifier
+  });
+
+  await assert.rejects(
+    () => fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false }),
+    /does not match signer/
+  );
+});
+
+test("rejects when proof submission is outside the configured grace period", async () => {
+  const fixture = await buildFixture({
+    proofSubmittedAt: "1735690200001",
+    proofSubmissionGracePeriod: "600000"
+  });
+
+  await assert.rejects(
+    () => fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false }),
+    /outside the configured grace period/
+  );
+});
+
+test("rejects when report generation is after the verification timeout", async () => {
+  const fixture = await buildFixture({ verificationTimeout: "1000" });
+
+  await assert.rejects(
+    () => fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false }),
+    /verification timeout expired/
+  );
+});
+
+test("persists consumed proof keys through the Prisma registry adapter", async () => {
+  const fixture = await buildFixture();
+  const registry = new PrismaProofConsumptionRegistry(new FakePrismaClient());
+  const keys = buildProofConsumptionKeys(fixture.proofBundle);
+  const record = {
+    taskId: fixture.task.taskId,
+    proofBundleHash: fixture.task.proofBundleHash,
+    reportHash: "0x8888888888888888888888888888888888888888888888888888888888888888" as Bytes32,
+    passed: true,
+    verifiedAt: VERIFIED_AT
+  };
+
+  assert.equal(await registry.hasAny(keys), false);
+  await registry.markConsumed(keys, record);
+  assert.equal(await registry.hasAny(keys), true);
+  await assert.rejects(() => registry.markConsumed(keys, record), /already consumed/);
 });
 
 async function buildFixture(options: BuildFixtureOptions = {}) {
@@ -176,7 +432,7 @@ async function buildFixture(options: BuildFixtureOptions = {}) {
       totalTokens: 120
     },
     deadline: DEADLINE,
-    verifier: verifierAddress
+    verifier: options.commitmentVerifier ?? verifierAddress
   };
   const commitmentHash = hashExecutionCommitment(commitment);
   const commitmentPointer = await storage.putObject(commitment, { namespace: "commitments" });
@@ -261,16 +517,22 @@ async function buildFixture(options: BuildFixtureOptions = {}) {
     fundedAt: FUNDED_AT,
     proofBundleHash: proofBundlePointer.hash,
     proofBundleURI: proofBundlePointer.uri,
-    proofSubmittedAt: "1735686700000",
+    proofSubmittedAt: options.proofSubmittedAt ?? "1735686700000",
     status: "PROOF_SUBMITTED"
   };
-  const settlement = new MockSettlementReader(task);
+  const settlement = new MockSettlementReader(
+    task,
+    options.verifierAuthorized ?? true,
+    options.proofSubmissionGracePeriod,
+    options.verificationTimeout
+  );
   const verifier = new CentralizedVerifier({
     settlement,
     storage,
     signer: verifierWallet,
     zktlsAdapters: [mockZkTlsAdapter],
     consumptionRegistry: options.consumptionRegistry,
+    verifierAddress: options.verifierAddress,
     clock: () => VERIFIED_AT
   });
 

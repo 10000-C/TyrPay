@@ -1,1 +1,41 @@
-// Placeholder schema for the verifier persistence layer.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ProofConsumptionKey {
+  id              String   @id @default(cuid())
+  keyType         String
+  key             String
+  taskId          String
+  proofBundleHash String
+  reportHash      String
+  passed          Boolean
+  verifiedAt      String
+  createdAt       DateTime @default(now())
+
+  @@unique([keyType, key])
+  @@index([taskId])
+  @@index([proofBundleHash])
+  @@index([reportHash])
+}
+
+model VerificationReport {
+  reportHash          String   @id
+  taskId              String
+  commitmentHash      String
+  proofBundleHash     String
+  passed              Boolean
+  verifier            String
+  verifiedAt          String
+  signedReportPayload Json
+  createdAt           DateTime @default(now())
+
+  @@index([taskId])
+  @@index([proofBundleHash])
+  @@index([verifier])
+}

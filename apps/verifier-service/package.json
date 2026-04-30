@@ -14,10 +14,10 @@
   "dependencies": {
     "@fulfillpay/sdk-core": "workspace:*",
     "@fulfillpay/storage-adapter": "workspace:*",
-    "@fulfillpay/zktls-adapter": "workspace:*"
+    "@fulfillpay/zktls-adapter": "workspace:*",
+    "ethers": "^6.16.0"
   },
   "devDependencies": {
-    "@types/node": "^22.15.30",
-    "ethers": "^6.16.0"
+    "@types/node": "^22.15.30"
   }
 }
