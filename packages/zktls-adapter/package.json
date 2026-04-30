@@ -7,7 +7,13 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "echo \"zktls-adapter tests pending\"",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/tests/mock-zktls-adapter.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fulfillpay/sdk-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30"
   }
 }
