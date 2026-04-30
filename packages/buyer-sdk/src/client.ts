@@ -90,13 +90,13 @@ export class BuyerSdk {
       metadataURI: input.metadataURI
     });
     const args = toCreateTaskIntentArgs(taskIntent);
-    const [taskId, taskNonce] = (await this.contract.createTaskIntent.staticCall(...args)) as [string, string];
     const tx = await this.contract.createTaskIntent(...args);
     const receipt = await waitForReceipt(tx);
+    const { taskId, taskNonce } = parseTaskIntentCreatedReceipt(receipt, this.contract, this.settlementAddress, taskIntent);
 
     return {
-      taskId: normalizeBytes32(taskId, "taskId"),
-      taskNonce: normalizeBytes32(taskNonce, "taskNonce"),
+      taskId,
+      taskNonce,
       taskIntent,
       receipt
     };
@@ -424,4 +424,63 @@ async function waitForReceipt(tx: { wait(): Promise<TransactionReceipt | null> }
   }
 
   return receipt;
+}
+
+function parseTaskIntentCreatedReceipt(
+  receipt: TransactionReceipt,
+  contract: Contract,
+  settlementAddress: Address,
+  taskIntent: TaskIntent
+): { taskId: Bytes32; taskNonce: Bytes32 } {
+  for (const log of receipt.logs) {
+    if (normalizeAddress(log.address, "log.address") !== settlementAddress) {
+      continue;
+    }
+
+    let parsedLog: ReturnType<Contract["interface"]["parseLog"]>;
+
+    try {
+      parsedLog = contract.interface.parseLog({
+        topics: log.topics,
+        data: log.data
+      });
+    } catch {
+      continue;
+    }
+
+    if (!parsedLog || parsedLog.name !== "TaskIntentCreated") {
+      continue;
+    }
+
+    const taskId = normalizeBytes32(parsedLog.args.taskId, "taskId");
+    const taskNonce = normalizeBytes32(parsedLog.args.taskNonce, "taskNonce");
+    const buyer = normalizeAddress(parsedLog.args.buyer, "buyer");
+    const seller = normalizeAddress(parsedLog.args.seller, "seller");
+    const token = normalizeAddress(parsedLog.args.token, "token");
+    const amount = normalizeUIntString(parsedLog.args.amount, "amount");
+    const deadline = normalizeUIntString(parsedLog.args.deadlineMs, "deadlineMs");
+
+    if (buyer !== taskIntent.buyer) {
+      throw new BuyerSdkValidationError("TaskIntentCreated buyer does not match the submitted task intent.");
+    }
+    if (seller !== taskIntent.seller) {
+      throw new BuyerSdkValidationError("TaskIntentCreated seller does not match the submitted task intent.");
+    }
+    if (token !== taskIntent.token) {
+      throw new BuyerSdkValidationError("TaskIntentCreated token does not match the submitted task intent.");
+    }
+    if (amount !== taskIntent.amount) {
+      throw new BuyerSdkValidationError("TaskIntentCreated amount does not match the submitted task intent.");
+    }
+    if (deadline !== taskIntent.deadline) {
+      throw new BuyerSdkValidationError("TaskIntentCreated deadline does not match the submitted task intent.");
+    }
+
+    return {
+      taskId,
+      taskNonce
+    };
+  }
+
+  throw new BuyerSdkValidationError("TaskIntentCreated event was not found in the transaction receipt.");
 }
