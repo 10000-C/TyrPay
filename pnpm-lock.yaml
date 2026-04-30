@@ -30,6 +30,13 @@ importers:
       '@fulfillpay/zktls-adapter':
         specifier: workspace:*
         version: link:../../packages/zktls-adapter
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.19.17
+      ethers:
+        specifier: ^6.16.0
+        version: 6.16.0
 
   packages/buyer-sdk: {}
 
