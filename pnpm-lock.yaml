@@ -19,7 +19,17 @@ importers:
 
   apps/mcp-server: {}
 
-  apps/verifier-service: {}
+  apps/verifier-service:
+    dependencies:
+      '@fulfillpay/sdk-core':
+        specifier: workspace:*
+        version: link:../../packages/sdk-core
+      '@fulfillpay/storage-adapter':
+        specifier: workspace:*
+        version: link:../../packages/storage-adapter
+      '@fulfillpay/zktls-adapter':
+        specifier: workspace:*
+        version: link:../../packages/zktls-adapter
 
   packages/buyer-sdk: {}
 

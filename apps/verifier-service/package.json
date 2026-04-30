@@ -10,5 +10,10 @@
     "dev": "node --watch src/index.ts",
     "test": "echo \"verifier-service tests pending\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fulfillpay/sdk-core": "workspace:*",
+    "@fulfillpay/storage-adapter": "workspace:*",
+    "@fulfillpay/zktls-adapter": "workspace:*"
   }
 }
