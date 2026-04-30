@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { type Bytes32, type CallIntent, type TaskContext } from "@fulfillpay/sdk-core";
+import { assertDeliveryReceipt, type Bytes32, type CallIntent, type TaskContext } from "@fulfillpay/sdk-core";
 
 import { hashRequestEvidence, hashResponseEvidence } from "../src/core/index.js";
 import {
@@ -97,15 +97,53 @@ test("normalizeReceipt derives hashes and enforces proof-context binding", async
   assert.equal(receipt.rawProofHash, hashMockRawProof(rawProof));
   assert.equal(receipt.rawProofURI, "mock://custom/raw-proof");
   assert.equal(receipt.observedAt, DEFAULT_MOCK_OBSERVED_AT);
+  assertDeliveryReceipt(receipt);
 
   await assert.rejects(
     () =>
       adapter.normalizeReceipt(rawProof, {
         taskContext: input.taskContext,
         callIndex: input.callIndex + 1,
-        callIntentHash: input.callIntentHash
+        callIntentHash: input.callIntentHash,
+        rawProofURI: "mock://custom/raw-proof"
       }),
     /Proof context mismatch/
+  );
+});
+
+test("normalizeReceipt canonicalizes callIntentHash before emitting a receipt", async () => {
+  const adapter = new MockZkTlsAdapter();
+  const input = createBaseInput();
+  const uppercaseCallIntentHash = input.callIntentHash.toUpperCase() as Bytes32;
+  const { rawProof } = await adapter.provenFetch({
+    ...input,
+    callIntentHash: uppercaseCallIntentHash
+  });
+
+  const receipt = await adapter.normalizeReceipt(rawProof, {
+    taskContext: input.taskContext,
+    callIndex: input.callIndex,
+    callIntentHash: uppercaseCallIntentHash,
+    rawProofURI: "mock://custom/raw-proof"
+  });
+
+  assert.equal(receipt.callIntentHash, input.callIntentHash);
+  assertDeliveryReceipt(receipt);
+});
+
+test("normalizeReceipt requires the caller to provide the stored rawProofURI", async () => {
+  const adapter = new MockZkTlsAdapter();
+  const input = createBaseInput();
+  const { rawProof } = await adapter.provenFetch(input);
+
+  await assert.rejects(
+    () =>
+      adapter.normalizeReceipt(rawProof, {
+        taskContext: input.taskContext,
+        callIndex: input.callIndex,
+        callIntentHash: input.callIntentHash
+      } as unknown as Parameters<MockZkTlsAdapter["normalizeReceipt"]>[1]),
+    /rawProofURI/
   );
 });
 

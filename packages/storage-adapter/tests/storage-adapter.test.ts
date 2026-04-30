@@ -11,6 +11,7 @@ import {
   MemoryStorageAdapter,
   StorageConfigurationError,
   StorageIntegrityError,
+  StorageNotFoundError,
   ZeroGStorageAdapter,
   type ZeroGStorageTransport
 } from "../src/index.js";
@@ -124,4 +125,27 @@ test("zero-g adapter fails fast when no transport is configured", async () => {
   const adapter = new ZeroGStorageAdapter();
 
   await assert.rejects(() => adapter.putObject(fixture.object), StorageConfigurationError);
+});
+
+test("zero-g adapter normalizes transport-level missing payloads into StorageNotFoundError", async () => {
+  const missingHash = `0x${"1".repeat(64)}` as `0x${string}`;
+  const missingUri = `0g://storage/proof-bundles/${missingHash}.json`;
+  const transport: ZeroGStorageTransport = {
+    async putObject(request) {
+      return { uri: `0g://storage/${request.namespace}/${request.hash}.json` };
+    },
+    async getObject(uri) {
+      throw new Error(`Missing payload for ${uri}`);
+    }
+  };
+  const adapter = new ZeroGStorageAdapter({ transport });
+
+  await assert.rejects(
+    () =>
+      adapter.getObject({
+        uri: missingUri,
+        hash: missingHash
+      }),
+    StorageNotFoundError
+  );
 });

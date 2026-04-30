@@ -44,7 +44,7 @@ export interface ZkTlsReceiptContext {
   taskContext: TaskContext;
   callIndex: number;
   callIntentHash: Bytes32;
-  rawProofURI?: URI;
+  rawProofURI: URI;
 }
 
 export interface BuildProviderProofContextInput {

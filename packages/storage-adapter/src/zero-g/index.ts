@@ -1,7 +1,7 @@
 import type { Bytes32, URI } from "@fulfillpay/sdk-core";
 
 import type { GetObjectOptions, PutObjectOptions, StorageAdapter, StoragePointer } from "../types.js";
-import { StorageConfigurationError } from "../types.js";
+import { StorageConfigurationError, StorageNotFoundError } from "../types.js";
 import {
   assertStoredHash,
   parseStoredJson,
@@ -49,7 +49,18 @@ export class ZeroGStorageAdapter implements StorageAdapter {
     const transport = this.requireTransport();
     const uri = toUri(pointerOrUri);
     const expectedHash = resolveExpectedHash(pointerOrUri, options);
-    const payloadText = await transport.getObject(uri);
+    let payloadText: string;
+
+    try {
+      payloadText = await transport.getObject(uri);
+    } catch (error) {
+      if (isMissingObjectError(error)) {
+        throw new StorageNotFoundError(`Stored object not found: ${uri}`);
+      }
+
+      throw error;
+    }
+
     const payload = parseStoredJson<T>(payloadText, `Stored object at ${uri} is not valid JSON.`);
 
     assertStoredHash(payload, expectedHash, uri);
@@ -63,4 +74,26 @@ export class ZeroGStorageAdapter implements StorageAdapter {
 
     return this.options.transport;
   }
+}
+
+function isMissingObjectError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const code = "code" in error ? error.code : undefined;
+  const status = "status" in error ? error.status : undefined;
+  const statusCode = "statusCode" in error ? error.statusCode : undefined;
+  const message = error.message.toLowerCase();
+
+  return (
+    error instanceof StorageNotFoundError ||
+    code === "ENOENT" ||
+    code === "NOT_FOUND" ||
+    status === 404 ||
+    statusCode === 404 ||
+    error.name === "NotFoundError" ||
+    message.includes("not found") ||
+    message.includes("missing payload")
+  );
 }

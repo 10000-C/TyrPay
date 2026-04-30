@@ -157,12 +157,14 @@ export class MockZkTlsAdapter
     }
 
     assertReceiptContextMatchesProofContext(rawProof.proofContext, context);
+    assertString(context.rawProofURI, "rawProofURI");
+    const normalizedCallIntentHash = normalizeBytes32(context.callIntentHash, "callIntentHash");
 
     return {
       schemaVersion: SCHEMA_VERSIONS.deliveryReceipt,
       taskContext: context.taskContext,
       callIndex: context.callIndex,
-      callIntentHash: context.callIntentHash,
+      callIntentHash: normalizedCallIntentHash,
       provider: rawProof.provider,
       providerProofId: rawProof.providerProofId,
       requestHash: hashRequestEvidence(rawProof.request),
@@ -170,7 +172,7 @@ export class MockZkTlsAdapter
       observedAt: rawProof.observedAt,
       extracted: rawProof.extracted,
       rawProofHash: hashMockRawProof(rawProof),
-      rawProofURI: context.rawProofURI ?? `mock://raw-proofs/${rawProof.providerProofId}`
+      rawProofURI: context.rawProofURI
     };
   }
 }
