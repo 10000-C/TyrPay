@@ -88,8 +88,7 @@ semantic values:
 | `passed` | `passed` |
 | `settlement.action` | `settlementAction` |
 | `settlement.amount` | `settlementAmount` |
-| `verifiedAt` | `verifiedAt` |
-
+| `verifiedAt` | `verifiedAt` || `reportHash` | `reportHash` |
 ## Redaction Rule
 
 If a request or response contains private content, the stored object MAY be a

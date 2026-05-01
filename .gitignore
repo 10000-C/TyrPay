@@ -6,3 +6,5 @@ coverage/
 artifacts/
 cache/
 .pnpm-store/
+typechain-types/
+deployments/

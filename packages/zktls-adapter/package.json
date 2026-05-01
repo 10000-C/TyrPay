@@ -9,5 +9,9 @@
     "build": "tsc -p tsconfig.json",
     "test": "echo \"zktls-adapter tests pending\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fulfillpay/sdk-core": "workspace:*",
+    "ethers": "^6.13.0"
   }
 }

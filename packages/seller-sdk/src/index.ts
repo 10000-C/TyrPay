@@ -1,3 +1,8 @@
-export function submitCommitment(): string {
-  return "commitment";
-}
+export { SellerClient } from "./client.js";
+export type {
+  SellerClientConfig,
+  SubmitCommitmentParams,
+  SubmitCommitmentResult,
+  SubmitProofBundleParams,
+  SubmitProofBundleResult,
+} from "./types.js";

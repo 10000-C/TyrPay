@@ -1,3 +1,7 @@
-export function getVerificationReport(): string {
-  return "verification-report";
-}
+export { VerifierClient } from "./client.js";
+export type {
+  VerifierClientConfig,
+  SettleParams,
+  SettleResult,
+  VerifyAndSettleResult,
+} from "./types.js";
