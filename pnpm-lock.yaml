@@ -80,7 +80,17 @@ importers:
         specifier: ^22.15.30
         version: 22.19.17
 
-  packages/seller-sdk: {}
+  packages/seller-sdk:
+    dependencies:
+      '@fulfillpay/sdk-core':
+        specifier: workspace:*
+        version: link:../sdk-core
+      '@fulfillpay/storage-adapter':
+        specifier: workspace:*
+        version: link:../storage-adapter
+      '@fulfillpay/zktls-adapter':
+        specifier: workspace:*
+        version: link:../zktls-adapter
 
   packages/shared: {}
 

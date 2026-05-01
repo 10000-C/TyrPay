@@ -9,5 +9,10 @@
     "build": "tsc -p tsconfig.json",
     "test": "echo \"seller-sdk tests pending\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fulfillpay/sdk-core": "workspace:*",
+    "@fulfillpay/storage-adapter": "workspace:*",
+    "@fulfillpay/zktls-adapter": "workspace:*"
   }
 }

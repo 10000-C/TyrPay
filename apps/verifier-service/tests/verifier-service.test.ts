@@ -22,6 +22,9 @@ import {
   InMemoryProofConsumptionRegistry,
   PrismaProofConsumptionRegistry,
   REQUIRED_VERIFICATION_CHECKS,
+  VerifierInputIntegrityError,
+  VerifierInputUnavailableError,
+  signVerificationReport,
   toSettlementReportStruct,
   type OnChainTask,
   type ProofConsumptionRegistry,
@@ -38,6 +41,10 @@ const WRONG_TASK_NONCE = "0x7777777777777777777777777777777777777777777777777777
 const OTHER_TASK_ID = "0x8888888888888888888888888888888888888888888888888888888888888888" as Bytes32;
 const OTHER_PROOF_BUNDLE_HASH =
   "0x9999999999999999999999999999999999999999999999999999999999999999" as Bytes32;
+const WRONG_COMMITMENT_HASH =
+  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as Bytes32;
+const WRONG_CALL_INTENT_HASH =
+  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" as Bytes32;
 const BUYER = "0x1111111111111111111111111111111111111111";
 const SELLER = "0x2222222222222222222222222222222222222222";
 const TOKEN = "0x3333333333333333333333333333333333333333";
@@ -58,6 +65,9 @@ interface BuildFixtureOptions {
   proofSubmittedAt?: string;
   proofSubmissionGracePeriod?: string;
   verificationTimeout?: string;
+  taskCommitmentHash?: Bytes32;
+  callIntentHash?: Bytes32;
+  proofBundleConsumed?: boolean;
 }
 
 class MockSettlementReader implements SettlementTaskReader {
@@ -156,6 +166,49 @@ test("signs a passing verification report for contract settlement", async () => 
   assert.equal(settlementReport.reportHash, result.report.reportHash);
 });
 
+test("rejects signing reports whose passed flag does not match required checks", async () => {
+  const fixture = await buildFixture();
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+  const { signature: _signature, reportHash: _reportHash, ...unsignedReport } = result.report;
+
+  await assert.rejects(
+    () =>
+      signVerificationReport(
+        {
+          ...unsignedReport,
+          checks: {
+            ...unsignedReport.checks,
+            modelMatched: false
+          },
+          passed: true
+        },
+        fixture.verifierWallet
+      ),
+    /passed must equal the AND/
+  );
+});
+
+test("rejects signing reports missing required checks", async () => {
+  const fixture = await buildFixture();
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+  const { signature: _signature, reportHash: _reportHash, ...unsignedReport } = result.report;
+  const checks: Record<string, boolean> = { ...unsignedReport.checks };
+
+  delete checks.modelMatched;
+
+  await assert.rejects(
+    () =>
+      signVerificationReport(
+        {
+          ...unsignedReport,
+          checks
+        },
+        fixture.verifierWallet
+      ),
+    /checks.modelMatched is required/
+  );
+});
+
 test("fails when the observed model is outside the commitment", async () => {
   const fixture = await buildFixture({ scenario: "model_mismatch" });
   const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
@@ -229,6 +282,18 @@ test("fails when receipt context differs from the on-chain task", async () => {
   assert.equal(result.checks.zkTlsProofValid, true);
 });
 
+test("fails when call intent hash does not match the proven request semantics", async () => {
+  const fixture = await buildFixture({ callIntentHash: WRONG_CALL_INTENT_HASH });
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+
+  assert.equal(result.report.passed, false);
+  assert.equal(result.checks.taskContextMatched, false);
+  assert.equal(result.checks.zkTlsProofValid, true);
+  assert.equal(result.checks.endpointMatched, true);
+  assert.equal(result.checks.modelMatched, true);
+  assert.equal(result.checks.usageSatisfied, true);
+});
+
 test("rejects verifier-side proof replay after a report is produced", async () => {
   const consumptionRegistry = new InMemoryProofConsumptionRegistry();
   const fixture = await buildFixture({ consumptionRegistry });
@@ -253,6 +318,15 @@ test("rejects proof replay when a consumption key belongs to another task", asyn
   });
 
   await assert.rejects(() => fixture.verifier.verifyTask(fixture.task.taskId), /already reserved by task/);
+});
+
+test("rejects report generation when the proof bundle was already consumed on-chain", async () => {
+  const fixture = await buildFixture({ proofBundleConsumed: true });
+
+  await assert.rejects(
+    () => fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false }),
+    /already consumed by the settlement contract/
+  );
 });
 
 test("fails when receipt usage is inflated beyond the raw proof extraction", async () => {
@@ -283,6 +357,20 @@ test("fails when receipt timestamp is changed away from the raw proof timestamp"
     mutateReceipt: (receipt) => ({
       ...receipt,
       observedAt: "1735686000000"
+    })
+  });
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+
+  assert.equal(result.report.passed, false);
+  assert.equal(result.checks.zkTlsProofValid, false);
+  assert.equal(result.checks.withinTaskWindow, false);
+});
+
+test("fails the task window check when receipt timestamp is mutated outside the window", async () => {
+  const fixture = await buildFixture({
+    mutateReceipt: (receipt) => ({
+      ...receipt,
+      observedAt: "1735689600001"
     })
   });
   const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
@@ -385,6 +473,15 @@ test("rejects when proof submission is outside the configured grace period", asy
   );
 });
 
+test("rejects storage hash mismatches as integrity failures", async () => {
+  const fixture = await buildFixture({ taskCommitmentHash: WRONG_COMMITMENT_HASH });
+
+  await assert.rejects(
+    () => fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false }),
+    (error) => error instanceof VerifierInputIntegrityError && !(error instanceof VerifierInputUnavailableError)
+  );
+});
+
 test("rejects when report generation is after the verification timeout", async () => {
   const fixture = await buildFixture({ verificationTimeout: "1000" });
 
@@ -454,7 +551,7 @@ async function buildFixture(options: BuildFixtureOptions = {}) {
     model: "gpt-4o-mini",
     messages: [{ role: "user", content: "prove this call" }]
   };
-  const callIntentHash = buildCallIntentHash({
+  const callIntentHash = options.callIntentHash ?? buildCallIntentHash({
     taskContext,
     callIndex: 0,
     host: commitment.target.host,
@@ -512,7 +609,7 @@ async function buildFixture(options: BuildFixtureOptions = {}) {
     token: TOKEN,
     amount: "1000000",
     deadline: DEADLINE,
-    commitmentHash,
+    commitmentHash: options.taskCommitmentHash ?? commitmentHash,
     commitmentURI: commitmentPointer.uri,
     fundedAt: FUNDED_AT,
     proofBundleHash: proofBundlePointer.hash,
@@ -526,12 +623,13 @@ async function buildFixture(options: BuildFixtureOptions = {}) {
     options.proofSubmissionGracePeriod,
     options.verificationTimeout
   );
+  settlement.proofBundleConsumed = options.proofBundleConsumed ?? false;
   const verifier = new CentralizedVerifier({
     settlement,
     storage,
     signer: verifierWallet,
     zktlsAdapters: [mockZkTlsAdapter],
-    consumptionRegistry: options.consumptionRegistry,
+    consumptionRegistry: options.consumptionRegistry ?? new InMemoryProofConsumptionRegistry(),
     verifierAddress: options.verifierAddress,
     clock: () => VERIFIED_AT
   });

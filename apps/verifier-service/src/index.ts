@@ -4,6 +4,7 @@ import {
   assertProofBundle,
   assertUnsignedVerificationReport,
   assertVerificationReport,
+  buildCallIntentHash,
   buildVerificationReportTypedData,
   hashDeliveryReceipt,
   hashExecutionCommitment,
@@ -30,7 +31,7 @@ import {
   type UnsignedVerificationReport,
   type VerificationReport
 } from "@fulfillpay/sdk-core";
-import type { StorageAdapter } from "@fulfillpay/storage-adapter";
+import { StorageIntegrityError, type StorageAdapter } from "@fulfillpay/storage-adapter";
 import {
   hashRequestEvidence,
   hashResponseEvidence,
@@ -180,7 +181,7 @@ export interface CentralizedVerifierOptions {
   storage: StorageAdapter;
   signer: VerificationReportSigner;
   zktlsAdapters: RawProofVerifier[];
-  consumptionRegistry?: ProofConsumptionRegistry;
+  consumptionRegistry: ProofConsumptionRegistry;
   verifierAddress?: string;
   clock?: () => UIntLike | Promise<UIntLike>;
 }
@@ -205,6 +206,7 @@ export interface VerificationEvaluation {
   aggregateUsage: AggregateUsage;
   consumptionKeys: ProofConsumptionKeys;
   existingConsumptionRecord: ProofConsumptionRecord | null;
+  proofBundleAlreadyConsumed: boolean;
 }
 
 export interface VerificationResult {
@@ -231,6 +233,13 @@ export class VerifierInputUnavailableError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "VerifierInputUnavailableError";
+  }
+}
+
+export class VerifierInputIntegrityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "VerifierInputIntegrityError";
   }
 }
 
@@ -441,8 +450,12 @@ export class CentralizedVerifier {
       throw new TypeError("CentralizedVerifier requires at least one zkTLS adapter.");
     }
 
+    if (!options.consumptionRegistry) {
+      throw new TypeError("CentralizedVerifier requires an explicit proof consumption registry.");
+    }
+
     this.zktlsAdapters = new Map(options.zktlsAdapters.map((adapter) => [adapter.name, adapter]));
-    this.consumptionRegistry = options.consumptionRegistry ?? new InMemoryProofConsumptionRegistry();
+    this.consumptionRegistry = options.consumptionRegistry;
     this.clock = options.clock ?? (() => Date.now());
   }
 
@@ -454,6 +467,12 @@ export class CentralizedVerifier {
     if (evaluation.existingConsumptionRecord !== null) {
       throw new ProofAlreadyConsumedError(
         `One or more proof consumption keys for task ${inputs.task.taskId} and bundle ${inputs.task.proofBundleHash} were already reserved by task ${evaluation.existingConsumptionRecord.taskId}, bundle ${evaluation.existingConsumptionRecord.proofBundleHash}, report ${evaluation.existingConsumptionRecord.reportHash}.`
+      );
+    }
+
+    if (evaluation.proofBundleAlreadyConsumed) {
+      throw new ProofAlreadyConsumedError(
+        `Proof bundle ${inputs.task.proofBundleHash} was already consumed by the settlement contract.`
       );
     }
 
@@ -553,15 +572,15 @@ export class CentralizedVerifier {
         isCommitmentBoundToTask(commitment, task) &&
         isProofBundleBoundToTask(proofBundle, task) &&
         proofBundle.receipts.every((receipt, index) =>
-          isReceiptBoundToExpectedContext(receipt, rawProofs[index], expectedTaskContext)
+          isReceiptBoundToExpectedContext(receipt, rawProofs[index], expectedTaskContext, receiptProofs[index])
         ),
       callIndicesUnique: hasUniqueValues(proofBundle.receipts.map((receipt) => receipt.callIndex)),
       proofNotConsumed:
         existingConsumptionRecord === null &&
         !hasDuplicateConsumptionKey(consumptionKeys) &&
         proofBundleAlreadyConsumed !== true,
-      withinTaskWindow: receiptProofs.every((proof) =>
-        proof.evidence !== null && isWithinTaskWindow(proof.evidence.observedAt, task, commitment)
+      withinTaskWindow: receiptProofs.every(
+        (proof) => hasAcceptedReceiptEvidence(proof) && isWithinTaskWindow(proof.evidence.observedAt, task, commitment)
       ),
       modelMatched: receiptProofs.every(
         (proof) =>
@@ -574,7 +593,8 @@ export class CentralizedVerifier {
       checks,
       aggregateUsage,
       consumptionKeys,
-      existingConsumptionRecord
+      existingConsumptionRecord,
+      proofBundleAlreadyConsumed
     };
   }
 
@@ -682,6 +702,10 @@ export class CentralizedVerifier {
         return this.options.storage.getObject<T>(uri, { expectedHash });
       }
 
+      if (error instanceof StorageIntegrityError) {
+        throw new VerifierInputIntegrityError(`Stored ${label} at ${uri} failed integrity verification: ${error.message}`);
+      }
+
       throw new VerifierInputUnavailableError(`Unable to load ${label} from ${uri}: ${toErrorMessage(error)}`);
     }
   }
@@ -695,6 +719,9 @@ export async function signVerificationReport(
   report: UnsignedVerificationReport,
   signer: VerificationReportSigner
 ): Promise<VerificationReport> {
+  assertUnsignedVerificationReport(report);
+  assertRequiredVerificationChecksAndPassRule(report);
+
   const signerAddress = normalizeAddress(await signer.getAddress(), "signer");
   if (report.verifier !== signerAddress) {
     throw new VerifierUnauthorizedError(
@@ -715,6 +742,19 @@ export async function signVerificationReport(
 
   assertVerificationReport(signedReport);
   return signedReport;
+}
+
+function assertRequiredVerificationChecksAndPassRule(report: UnsignedVerificationReport | VerificationReport): void {
+  for (const check of REQUIRED_VERIFICATION_CHECKS) {
+    if (typeof report.checks[check] !== "boolean") {
+      throw new TypeError(`VerificationReport.checks.${check} is required.`);
+    }
+  }
+
+  const expectedPassed = REQUIRED_VERIFICATION_CHECKS.every((check) => report.checks[check]);
+  if (report.passed !== expectedPassed) {
+    throw new TypeError("VerificationReport.passed must equal the AND of all required verification checks.");
+  }
 }
 
 export function toSettlementReportStruct(
@@ -938,11 +978,14 @@ function isProofBundleBoundToTask(proofBundle: ProofBundle, task: OnChainTask): 
 function isReceiptBoundToExpectedContext(
   receipt: DeliveryReceipt,
   rawProof: unknown,
-  expectedTaskContext: TaskContext
+  expectedTaskContext: TaskContext,
+  proof: ReceiptProofVerification
 ): boolean {
   return (
     taskContextsEqual(receipt.taskContext, expectedTaskContext) &&
-    providerProofContextMatchesReceipt(extractProviderProofContext(rawProof), receipt, expectedTaskContext)
+    providerProofContextMatchesReceipt(extractProviderProofContext(rawProof), receipt, expectedTaskContext) &&
+    hasAcceptedReceiptEvidence(proof) &&
+    receiptCallIntentMatchesEvidence(receipt, proof.evidence, expectedTaskContext)
   );
 }
 
@@ -968,6 +1011,41 @@ function providerProofContextMatchesReceipt(
     proofContext.callIndex === receipt.callIndex &&
     proofContext.callIntentHash === receipt.callIntentHash
   );
+}
+
+function receiptCallIntentMatchesEvidence(
+  receipt: DeliveryReceipt,
+  evidence: RawProofReceiptEvidence,
+  expectedTaskContext: TaskContext
+): boolean {
+  const declaredModel = extractDeclaredModel(evidence.request.body);
+  if (!declaredModel) {
+    return false;
+  }
+
+  try {
+    const expectedCallIntentHash = buildCallIntentHash({
+      taskContext: expectedTaskContext,
+      callIndex: receipt.callIndex,
+      host: evidence.request.host,
+      path: evidence.request.path,
+      method: evidence.request.method,
+      declaredModel,
+      requestBodyHash: hashObject(evidence.request.body)
+    });
+
+    return receipt.callIntentHash === expectedCallIntentHash;
+  } catch {
+    return false;
+  }
+}
+
+function extractDeclaredModel(requestBody: unknown): string | null {
+  if (!isRecord(requestBody) || typeof requestBody.model !== "string" || requestBody.model.length === 0) {
+    return null;
+  }
+
+  return requestBody.model;
 }
 
 function taskContextsEqual(left: TaskContext, right: TaskContext): boolean {
