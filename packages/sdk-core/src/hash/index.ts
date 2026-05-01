@@ -1,134 +1,217 @@
-import { keccak256, toUtf8Bytes } from "ethers";
+/**
+ * Hashing utilities for FulFilPay protocol objects.
+ *
+ * Canonical JSON hashes use: keccak256(utf8(canonical_json(object)))
+ * As defined in docs/protocol/canonicalization-and-hashing.md
+ *
+ * EIP-712 struct hashes use ethers TypedDataEncoder (matching contract behavior).
+ *
+ * Test vector: test/vectors/hashing/pass-basic.json
+ */
+
+import { keccak256, toUtf8Bytes, TypedDataEncoder } from "ethers";
 
 import { canonicalize } from "../canonicalize/index.js";
-import {
-  assertCallIntent,
-  assertDeliveryReceipt,
-  assertExecutionCommitment,
-  assertProofBundle,
-  assertProtocolObject,
-  assertTaskContext,
-  assertTaskIntent,
-  assertUnsignedVerificationReport,
-  buildCallIntent,
-  buildTaskContext,
-  type BuildCallIntentInput,
-  type BuildTaskContextInput,
-  type Bytes32,
-  type CallIntent,
-  type DeliveryReceipt,
-  type ExecutionCommitment,
-  type ProofBundle,
-  type TaskContext,
-  type TaskIntent,
-  type UnsignedVerificationReport,
-  type VerificationReport
+import type {
+  HexString,
+  TaskIntent,
+  TaskContext,
+  ExecutionCommitment,
+  CallIntent,
+  DeliveryReceipt,
+  ProofBundle,
+  VerificationReport,
+  VerificationReportStruct,
 } from "../types/index.js";
 
-export interface HashObjectOptions {
-  excludeTopLevelKeys?: string[];
+// ---------------------------------------------------------------------------
+// EIP-712 type definitions (shared with eip712 module)
+// ---------------------------------------------------------------------------
+
+/** Field definition for EIP-712 types. */
+interface TypedDataField {
+  name: string;
+  type: string;
 }
 
-export interface BuildCallIntentHashInput extends Omit<BuildCallIntentInput, "taskContextHash"> {
-  taskContext: TaskContext | BuildTaskContextInput;
+/**
+ * The VerificationReport EIP-712 type definition, matching the contract struct.
+ * Must be kept in sync with the contract's VerificationReport fields.
+ */
+const VERIFICATION_REPORT_EIP712_TYPES: Record<string, TypedDataField[]> = {
+  VerificationReport: [
+    { name: "taskId", type: "bytes32" },
+    { name: "buyer", type: "address" },
+    { name: "seller", type: "address" },
+    { name: "commitmentHash", type: "bytes32" },
+    { name: "proofBundleHash", type: "bytes32" },
+    { name: "passed", type: "bool" },
+    { name: "settlementAction", type: "uint8" },
+    { name: "settlementAmount", type: "uint256" },
+    { name: "verifiedAt", type: "uint256" },
+    { name: "reportHash", type: "bytes32" },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// Core hash primitive
+// ---------------------------------------------------------------------------
+
+/**
+ * Hash a canonical JSON string using keccak256.
+ * This is the fundamental hash operation: keccak256(utf8(canonical_json)).
+ *
+ * @param canonicalJson - The canonical JSON string to hash
+ * @returns keccak256 hash as a hex string
+ */
+export function hashCanonicalJson(canonicalJson: string): HexString {
+  return keccak256(toUtf8Bytes(canonicalJson)) as HexString;
 }
 
-export function hashObject(input: unknown, options: HashObjectOptions = {}): Bytes32 {
-  const normalized = omitTopLevelKeys(input, options.excludeTopLevelKeys);
-
-  if (isProtocolSchemaObject(normalized)) {
-    assertProtocolObject(normalized);
-  }
-
-  return keccak256(toUtf8Bytes(canonicalize(normalized))) as Bytes32;
+/**
+ * Canonicalize and hash any protocol object.
+ *
+ * Equivalent to: keccak256(utf8(canonicalize(obj)))
+ *
+ * @param obj - Any JSON-serializable protocol object
+ * @returns keccak256 hash as a hex string
+ */
+export function hashObject(obj: unknown): HexString {
+  const canonical = canonicalize(obj);
+  return hashCanonicalJson(canonical);
 }
 
-export function hashTaskIntent(input: TaskIntent): Bytes32 {
-  assertTaskIntent(input);
-  return hashObject(input);
+// ---------------------------------------------------------------------------
+// Protocol object hash functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Hash a TaskIntent object.
+ *
+ * Test vector:
+ *   task-intent.basic.json → 0x3cabd998e069ab6b94aadf54065f52f4822d1f0b74b53b18003ec0bdc03a6990
+ */
+export function hashTaskIntent(intent: TaskIntent): HexString {
+  return hashObject(intent);
 }
 
-export function hashTaskContext(input: TaskContext): Bytes32 {
-  assertTaskContext(input);
-  return hashObject(input);
+/**
+ * Hash a TaskContext object.
+ *
+ * Test vector:
+ *   task-context.basic.json → 0x1385f097d4a29a5e8268c6da90fc09848c035b8199f1b32d41c3a38f2d374207
+ */
+export function hashTaskContext(context: TaskContext): HexString {
+  return hashObject(context);
 }
 
-export function buildTaskContextHash(input: BuildTaskContextInput): Bytes32 {
-  return hashTaskContext(buildTaskContext(input));
+/**
+ * Hash an ExecutionCommitment object.
+ *
+ * The resulting hash is the `commitmentHash` stored on-chain.
+ *
+ * Test vector:
+ *   commitment.openai-compatible.json → 0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a
+ */
+export function hashExecutionCommitment(commitment: ExecutionCommitment): HexString {
+  return hashObject(commitment);
 }
 
-export function hashExecutionCommitment(input: ExecutionCommitment): Bytes32 {
-  assertExecutionCommitment(input);
-  return hashObject(input);
+/**
+ * Hash a CallIntent object.
+ *
+ * Test vector:
+ *   call-intent.basic.json → 0xddd7776ef8be07ac441076aefa5eb46859a31129311dbad6b8b72f864775d76b
+ */
+export function hashCallIntent(callIntent: CallIntent): HexString {
+  return hashObject(callIntent);
 }
 
-export function hashCallIntent(input: CallIntent): Bytes32 {
-  assertCallIntent(input);
-  return hashObject(input);
+/**
+ * Hash a DeliveryReceipt object.
+ * No fields are excluded from the hash.
+ *
+ * Test vector:
+ *   receipt.mock.valid.json → 0xf819ac0b3dd7fb8e6a0921bbd3aa213c2a9861c1c3ecbcd8d6bbf5254e8774e3
+ */
+export function hashDeliveryReceipt(receipt: DeliveryReceipt): HexString {
+  return hashObject(receipt);
 }
 
-export function buildCallIntentHash(input: BuildCallIntentHashInput): Bytes32 {
-  const taskContext = isTaskContext(input.taskContext) ? input.taskContext : buildTaskContext(input.taskContext);
-
-  return hashCallIntent(
-    buildCallIntent({
-      taskContextHash: hashTaskContext(taskContext),
-      callIndex: input.callIndex,
-      host: input.host,
-      path: input.path,
-      method: input.method,
-      declaredModel: input.declaredModel,
-      requestBodyHash: input.requestBodyHash
-    })
-  );
+/**
+ * Hash a ProofBundle object.
+ *
+ * Test vector:
+ *   proof-bundle.pass-basic.json → 0xcb24838e336e57d8398dc543b2fa406471f724b26321ab4f3cce4814891de3d7
+ */
+export function hashProofBundle(bundle: ProofBundle): HexString {
+  return hashObject(bundle);
 }
 
-export function hashDeliveryReceipt(input: DeliveryReceipt): Bytes32 {
-  assertDeliveryReceipt(input);
-  return hashObject(input);
+/**
+ * Hash a VerificationReport (unsigned, off-chain object).
+ *
+ * Per docs/protocol/canonicalization-and-hashing.md:
+ *   - `reportHash` is excluded from hash computation
+ *   - `signature` is excluded from hash computation
+ *
+ * Test vector:
+ *   verification-report.pass-basic.unsigned.json → 0xc651276636791738328a0ce58cc3f52ef786f1ef1814144ea8a6857e31f0e715
+ *
+ * @param report - The full VerificationReport object
+ * @returns keccak256 hash of the canonicalized report (excluding reportHash and signature)
+ */
+export function hashVerificationReport(report: VerificationReport): HexString {
+  // Create a copy excluding reportHash and signature
+  const { reportHash: _rh, signature: _sig, ...unsigned } = report;
+  void _rh;
+  void _sig;
+  return hashObject(unsigned);
 }
 
-export function hashProofBundle(input: ProofBundle): Bytes32 {
-  assertProofBundle(input);
-  return hashObject(input);
-}
+// ---------------------------------------------------------------------------
+// EIP-712 struct hash (contract-aligned)
+// ---------------------------------------------------------------------------
 
-export function hashVerificationReport(input: UnsignedVerificationReport | VerificationReport): Bytes32 {
-  const unsignedReport = toUnsignedVerificationReport(input);
-  assertUnsignedVerificationReport(unsignedReport);
-  return hashObject(unsignedReport, { excludeTopLevelKeys: ["reportHash", "signature"] });
-}
+/**
+ * The VERIFICATION_REPORT_TYPEHASH as computed by ethers TypedDataEncoder.
+ *
+ * This is: keccak256(encodeType("VerificationReport", types))
+ * where encodeType produces:
+ *   "VerificationReport(bytes32 taskId,address buyer,address seller,bytes32 commitmentHash,bytes32 proofBundleHash,bool passed,uint8 settlementAction,uint256 settlementAmount,uint256 verifiedAt,bytes32 reportHash)"
+ */
+export const VERIFICATION_REPORT_TYPEHASH: HexString =
+  keccak256(
+    toUtf8Bytes(
+      "VerificationReport(bytes32 taskId,address buyer,address seller,bytes32 commitmentHash,bytes32 proofBundleHash,bool passed,uint8 settlementAction,uint256 settlementAmount,uint256 verifiedAt,bytes32 reportHash)"
+    )
+  ) as HexString;
 
-function omitTopLevelKeys(input: unknown, excludedKeys: string[] | undefined): unknown {
-  if (!excludedKeys || excludedKeys.length === 0 || !isPlainObject(input)) {
-    return input;
-  }
-
-  const omitted = new Set(excludedKeys);
-
-  return Object.fromEntries(Object.entries(input).filter(([key]) => !omitted.has(key)));
-}
-
-function isTaskContext(value: TaskContext | BuildTaskContextInput): value is TaskContext {
-  return isProtocolSchemaObject(value);
-}
-
-function toUnsignedVerificationReport(
-  report: UnsignedVerificationReport | VerificationReport
-): UnsignedVerificationReport {
-  const { signature: _signature, ...unsignedReport } = report;
-  return unsignedReport;
-}
-
-function isProtocolSchemaObject(value: unknown): value is { schemaVersion: string } {
-  return isPlainObject(value) && typeof value.schemaVersion === "string" && value.schemaVersion.startsWith("fulfillpay.");
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+/**
+ * Compute the EIP-712 struct hash for a VerificationReport.
+ *
+ * Uses ethers TypedDataEncoder.hashStruct which implements the same algorithm
+ * as the contract's `_hashVerificationReport`:
+ *   keccak256(abi.encode(typeHash, field1, field2, ...))
+ *
+ * Test vector structHash (from eip712/verification-report-pass-basic.json):
+ *   0xd319f365b0afdf45f929b60581a6dc69ab72e5be9d79bc1e0e32e565f038d34f
+ */
+export function hashVerificationReportStruct(report: VerificationReportStruct): HexString {
+  return TypedDataEncoder.hashStruct(
+    "VerificationReport",
+    VERIFICATION_REPORT_EIP712_TYPES,
+    {
+      taskId: report.taskId,
+      buyer: report.buyer,
+      seller: report.seller,
+      commitmentHash: report.commitmentHash,
+      proofBundleHash: report.proofBundleHash,
+      passed: report.passed,
+      settlementAction: report.settlementAction,
+      settlementAmount: report.settlementAmount,
+      verifiedAt: report.verifiedAt,
+      reportHash: report.reportHash,
+    },
+  ) as HexString;
 }

@@ -1,3 +1,4 @@
-export * from "./local/index.js";
-export * from "./memory/index.js";
-export * from "./zero-g/index.js";
+export { type StorageProvider } from "./core.js";
+export { MemoryStorage } from "./memory.js";
+export { LocalStorage, type LocalStorageOptions } from "./local.js";
+export { ZeroGStorage, type ZeroGStorageConfig } from "./zero-g.js";

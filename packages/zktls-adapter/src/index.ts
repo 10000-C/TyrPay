@@ -1,3 +1,3 @@
-export * from "./core/index.js";
-export * from "./mock/index.js";
-export * from "./reclaim/index.js";
+export { ZkTLSProvider, ZkTLSRequest, ZkTLSResult, ResponseMatch } from "./core/index.js";
+export { MockZkTLS } from "./mock/index.js";
+export { ReclaimZkTLS, ReclaimConfig } from "./reclaim/index.js";
