@@ -8,7 +8,16 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "node --watch src/index.ts",
-    "test": "echo \"verifier-service tests pending\"",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/tests/verifier-service.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fulfillpay/sdk-core": "workspace:*",
+    "@fulfillpay/storage-adapter": "workspace:*",
+    "@fulfillpay/zktls-adapter": "workspace:*",
+    "ethers": "^6.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30"
   }
 }

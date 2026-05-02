@@ -12,6 +12,7 @@
     "proofBundleHash": "0xcb24838e336e57d8398dc543b2fa406471f724b26321ab4f3cce4814891de3d7",
     "passed": true,
     "checks": {
+      "callIndicesUnique": true,
       "commitmentHashMatched": true,
       "endpointMatched": true,
       "modelMatched": true,
@@ -32,7 +33,7 @@
     "verifier": "0x7777777777777777777777777777777777777777",
     "verifiedAt": "1735686900000"
   },
-  "canonical": "{\"aggregateUsage\":{\"totalTokens\":128},\"buyer\":\"0x1111111111111111111111111111111111111111\",\"chainId\":\"31337\",\"checks\":{\"commitmentHashMatched\":true,\"endpointMatched\":true,\"modelMatched\":true,\"proofBundleHashMatched\":true,\"proofNotConsumed\":true,\"taskContextMatched\":true,\"usageSatisfied\":true,\"withinTaskWindow\":true,\"zkTlsProofValid\":true},\"commitmentHash\":\"0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a\",\"passed\":true,\"proofBundleHash\":\"0xcb24838e336e57d8398dc543b2fa406471f724b26321ab4f3cce4814891de3d7\",\"schemaVersion\":\"fulfillpay.verification-report.v1\",\"seller\":\"0x2222222222222222222222222222222222222222\",\"settlement\":{\"action\":\"RELEASE\",\"amount\":\"1000000\"},\"settlementContract\":\"0x4444444444444444444444444444444444444444\",\"taskId\":\"0x5555555555555555555555555555555555555555555555555555555555555555\",\"verifiedAt\":\"1735686900000\",\"verifier\":\"0x7777777777777777777777777777777777777777\"}",
-  "hash": "0xc651276636791738328a0ce58cc3f52ef786f1ef1814144ea8a6857e31f0e715",
+  "canonical": "{\"aggregateUsage\":{\"totalTokens\":128},\"buyer\":\"0x1111111111111111111111111111111111111111\",\"chainId\":\"31337\",\"checks\":{\"callIndicesUnique\":true,\"commitmentHashMatched\":true,\"endpointMatched\":true,\"modelMatched\":true,\"proofBundleHashMatched\":true,\"proofNotConsumed\":true,\"taskContextMatched\":true,\"usageSatisfied\":true,\"withinTaskWindow\":true,\"zkTlsProofValid\":true},\"commitmentHash\":\"0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a\",\"passed\":true,\"proofBundleHash\":\"0xcb24838e336e57d8398dc543b2fa406471f724b26321ab4f3cce4814891de3d7\",\"schemaVersion\":\"fulfillpay.verification-report.v1\",\"seller\":\"0x2222222222222222222222222222222222222222\",\"settlement\":{\"action\":\"RELEASE\",\"amount\":\"1000000\"},\"settlementContract\":\"0x4444444444444444444444444444444444444444\",\"taskId\":\"0x5555555555555555555555555555555555555555555555555555555555555555\",\"verifiedAt\":\"1735686900000\",\"verifier\":\"0x7777777777777777777777777777777777777777\"}",
+  "hash": "0x4e0608cf3e990bf12dad76e616c9bb51f4eb117aa140cc94001868f4fa328a82",
   "notes": "Unsigned report body used to derive the EIP-712 digest. Signature material lives in test/vectors/eip712."
 }

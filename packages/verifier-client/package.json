@@ -9,5 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "echo \"verifier-client tests pending\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fulfillpay/sdk-core": "workspace:*"
   }
 }

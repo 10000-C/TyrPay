@@ -19,7 +19,24 @@ importers:
 
   apps/mcp-server: {}
 
-  apps/verifier-service: {}
+  apps/verifier-service:
+    dependencies:
+      '@fulfillpay/sdk-core':
+        specifier: workspace:*
+        version: link:../../packages/sdk-core
+      '@fulfillpay/storage-adapter':
+        specifier: workspace:*
+        version: link:../../packages/storage-adapter
+      '@fulfillpay/zktls-adapter':
+        specifier: workspace:*
+        version: link:../../packages/zktls-adapter
+      ethers:
+        specifier: ^6.16.0
+        version: 6.16.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.19.17
 
   packages/buyer-sdk:
     dependencies:
@@ -73,7 +90,17 @@ importers:
         specifier: ^22.15.30
         version: 22.19.17
 
-  packages/seller-sdk: {}
+  packages/seller-sdk:
+    dependencies:
+      '@fulfillpay/sdk-core':
+        specifier: workspace:*
+        version: link:../sdk-core
+      '@fulfillpay/storage-adapter':
+        specifier: workspace:*
+        version: link:../storage-adapter
+      '@fulfillpay/zktls-adapter':
+        specifier: workspace:*
+        version: link:../zktls-adapter
 
   packages/shared: {}
 
@@ -87,7 +114,11 @@ importers:
         specifier: ^22.15.30
         version: 22.19.17
 
-  packages/verifier-client: {}
+  packages/verifier-client:
+    dependencies:
+      '@fulfillpay/sdk-core':
+        specifier: workspace:*
+        version: link:../sdk-core
 
   packages/zktls-adapter:
     dependencies:

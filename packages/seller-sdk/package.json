@@ -13,6 +13,7 @@
   "dependencies": {
     "@fulfillpay/sdk-core": "workspace:*",
     "@fulfillpay/storage-adapter": "workspace:*",
+    "@fulfillpay/zktls-adapter": "workspace:*"
     "@fulfillpay/zktls-adapter": "workspace:*",
     "ethers": "^6.16.0"
   },
