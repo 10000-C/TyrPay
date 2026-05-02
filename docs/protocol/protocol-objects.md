@@ -214,6 +214,9 @@ SDKs MAY expose `EXECUTING`, `VERIFIED_PASS`, and `VERIFIED_FAIL` as derived
 statuses. SDKs MAY also expose `EXPIRED` for unfunded tasks whose `deadline`
 has passed. Derived values MUST NOT be required for contract safety.
 
+Phase 1 SDK 仅实现 `EXECUTING` 和 `EXPIRED`；`VERIFIED_PASS` / `VERIFIED_FAIL`
+暂不实现，Buyer Agent 可通过 `getReport()` 主动查询 report 结果。
+
 ## SettlementAction
 
 ```text
