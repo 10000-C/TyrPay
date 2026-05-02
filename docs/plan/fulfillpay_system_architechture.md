@@ -59,9 +59,10 @@ Buyer SDK 主要承担以下职责：
 2. 从合约获取 taskId 与 taskNonce；
 3. 读取 Seller 提交的 Execution Commitment；
 4. 校验 commitment 是否符合 Buyer 预期；
-5. 在确认 commitment 后锁款；
+5. 在确认 commitment 后锁款（`fundTask` 强制在锁款前调用 `validateCommitment`，确保链下承诺内容符合 Buyer 预期）；
 6. 监听任务状态；
-7. 查询 Verification Report 与最终结算结果。
+7. 查询 Verification Report 与最终结算结果；
+8. 超时退款：在 proof submission grace period 结束后未提交 proof 时退款（`refundAfterProofSubmissionDeadline`）；在 verification timeout 后未收到 settlement report 时退款（`refundAfterVerificationTimeout`）。
 
 3.3 设计边界
 
@@ -167,13 +168,24 @@ Contracts 主要承担以下职责：
 
 5.3 Phase 1 状态机
 
+链上持久状态：
+
 INTENT_CREATED
 → COMMITMENT_SUBMITTED
 → FUNDED
-→ EXECUTING
 → PROOF_SUBMITTED
-→ VERIFIED_PASS / VERIFIED_FAIL
 → SETTLED / REFUNDED
+
+超时退款路径：
+
+FUNDED → REFUNDED（refundAfterProofSubmissionDeadline，proof submission grace period 结束后未提交 proof）
+PROOF_SUBMITTED → REFUNDED（refundAfterVerificationTimeout，verification timeout 后未收到 settlement report）
+
+SDK 派生状态（不上链）：
+
+EXECUTING：链上状态为 FUNDED 且未提交 proof bundle
+EXPIRED：链上状态为 INTENT_CREATED 或 COMMITMENT_SUBMITTED 且 deadline 已过
+VERIFIED_PASS / VERIFIED_FAIL：Phase 1 暂不实现，Buyer Agent 可通过 getReport() 主动查询
 
 5.4 结算规则
 
@@ -417,6 +429,8 @@ fulfillpay_validate_commitment
 fulfillpay_fund_task
 fulfillpay_get_task_status
 fulfillpay_get_report
+fulfillpay_refund_after_proof_submission_deadline
+fulfillpay_refund_after_verification_timeout
 
 9.3 Seller MCP Tools
 

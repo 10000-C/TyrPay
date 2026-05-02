@@ -45,7 +45,7 @@ Task Intent
 | M2 | SDK Core | 依赖 M0；Buyer SDK、Seller SDK、Verifier、Adapters 均依赖它。 | 可与 M1、M3 并行。 | canonicalize、hashObject、buildTaskContext、buildCallIntentHash、EIP-712 helper、shared types。 |
 | M3 | Storage Adapter | 依赖 M0/M2 的 hash 与对象规范；正式 0G 可晚于 Local/Memory。 | 可与 M1/M2/M4 并行。 | StorageAdapter interface、LocalStorageAdapter、MemoryStorageAdapter、0G Adapter placeholder / 实现。 |
 | M4 | Mock zkTLS Adapter | 依赖 M2；必须先于真实 Reclaim 主路径，以便先打通 Mock E2E。 | 可与 M3 并行。 | Mock `provenFetch`、`verifyRawProof`、`normalizeReceipt`；模拟 model、usage、timestamp、proofContext。 |
-| M6 | Buyer SDK | 依赖 M1/M2；锁款、状态查询依赖合约 ABI。 | 可与 M5 的 commitment 构造部分并行。 | `createTaskIntent`、`getCommitment`、`validateCommitment`、`fundTask`、`getTaskStatus`、`getReport`。 |
+| M6 | Buyer SDK | 依赖 M1/M2；锁款、状态查询依赖合约 ABI。 | 可与 M5 的 commitment 构造部分并行。 | `createTaskIntent`、`getCommitment`、`validateCommitment`、`fundTask`（强制锁款前校验 commitment）、`getTaskStatus`（实现 `EXECUTING` / `EXPIRED` 派生状态；`VERIFIED_PASS` / `VERIFIED_FAIL` 暂不实现，Buyer Agent 可通过 `getReport()` 主动查询）、`getReport`、`refundAfterProofSubmissionDeadline`、`refundAfterVerificationTimeout`。 |
 | M5 | Seller SDK | 依赖 M1/M2/M3/M4；proof bundle 生成后才能支撑 Verifier 完整开发。 | commitment 构造可与 Buyer SDK 并行；`provenFetch` / `submitProofBundle` 需等 Storage/Mock。 | `submitCommitment`、`provenFetch`、`buildDeliveryReceipt`、`buildProofBundle`、`uploadProofBundle`、`submitProofBundleHash`。 |
 | M7 | Centralized Verifier | 依赖 M1/M2/M3/M4/M5；必须在 Seller SDK 能产出 Mock Proof Bundle 后进入完整实现。 | Verifier 框架可与 Reclaim Adapter PoC 并行。 | 读取链上 task、读取 proof bundle、检查 context/timestamp/model/usage、防重放、签名 Verification Report。 |
 | E2E | Mock Closed Loop | 依赖 M1-M7；必须先跑通再替换真实 zkTLS / 0G。 | 测试 fixtures 可提前并行准备。 | PASS 放款、model mismatch 退款、usage 不足退款、proofBundle 重放拒绝、非法 verifier 签名拒绝。 |
@@ -109,7 +109,7 @@ M0 → M1/M2/M3 并行 → M4 → M6/M5 → M7 → Mock E2E → M8 / M7b → M9
 | M2 SDK Core | TypeScript 类型、hash 工具、TaskContext 构造、callIntentHash、EIP-712 helper 可复用；与 fixtures 的 hash 测试结果一致。 |  |
 | M3 Storage Adapter | Local/Memory Adapter 可完成 put/get/hash check；对象内容被篡改时读取失败；0G Adapter 接口不影响上层调用。 |  |
 | M4 Mock zkTLS Adapter | 可生成稳定 mock rawProof、extracted fields、DeliveryReceipt；能模拟 PASS、model mismatch、usage insufficient、timestamp invalid 等场景。 |  |
-| M6 Buyer SDK | 可完成 createTaskIntent、读取/校验 commitment、fundTask、查询 task/report；能在 E2E 中驱动 Buyer 侧全流程。 |  |
+| M6 Buyer SDK | 可完成 createTaskIntent、读取/校验 commitment、fundTask（强制锁款前校验 commitment）、查询 task/report、refundAfterProofSubmissionDeadline、refundAfterVerificationTimeout；能在 E2E 中驱动 Buyer 侧全流程。 |  |
 | M5 Seller SDK | 可提交 commitment、执行 mock provenFetch、生成 receipt/proofBundle、上传 storage、提交 proofBundleHash；能在 E2E 中驱动 Seller 侧全流程。 |  |
 | M7 Centralized Verifier | 能读取链上 task 与 storage proof bundle；完成 context、timestamp、model、usage、防重放检查；能签名 Verification Report；PASS/FAIL 结果可被合约执行。 |  |
 | E2E Mock Closed Loop | 至少覆盖 PASS 放款、model mismatch 退款、usage 不足退款、proofBundle 重放拒绝、非法 verifier 签名拒绝；CI 可一键运行。 |  |
