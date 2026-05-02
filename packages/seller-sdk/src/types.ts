@@ -1,4 +1,4 @@
-import type { Bytes32, Address, UIntLike, URI, ExecutionCommitment, TaskContext, DeliveryReceipt, ProofBundle } from "@fulfillpay/sdk-core";
+import type { Bytes32, Address, UIntLike, URI, ProofBundle } from "@fulfillpay/sdk-core";
 import type { StorageAdapter, StoragePointer } from "@fulfillpay/storage-adapter";
 import type { ZkTlsAdapter } from "@fulfillpay/zktls-adapter";
 
@@ -56,16 +56,6 @@ export interface UploadProofBundleResult {
   bundle: ProofBundle;
 }
 
-/**
- * Result of the full seller flow (commitment → proven fetch → proof bundle → submit).
- */
-export interface SellerFlowResult {
-  commitment: SubmitCommitmentResult;
-  receipts: DeliveryReceipt[];
-  proofBundle: ProofBundle;
-  upload: UploadProofBundleResult;
-  proofSubmission: SubmitProofBundleHashResult;
-}
 
 /**
  * Minimal ethers.js Signer interface needed by Seller SDK.

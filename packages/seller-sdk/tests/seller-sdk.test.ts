@@ -606,3 +606,73 @@ test("provenFetch with mock scenario produces correct receipt", async () => {
   assert.equal(result.receipt.extracted.model, "gpt-4o-mini");
   assert.ok(result.receipt.extracted.usage.totalTokens >= 1);
 });
+
+// ── Endpoint and model validation tests ───────────────────────────
+
+test("provenFetch rejects request with mismatched host", async () => {
+  const agent = createSellerAgent();
+  const commitment = commitmentFixture.object;
+
+  await assert.rejects(
+    () =>
+      agent.provenFetch({
+        commitment,
+        callIndex: 0,
+        request: { host: "wrong.api.com", path: "/v1/chat/completions", method: "POST" },
+        declaredModel: "gpt-4o-mini",
+        taskNonce: TASK_NONCE
+      }),
+    /request.host.*does not match commitment.target.host/
+  );
+});
+
+test("provenFetch rejects request with mismatched path", async () => {
+  const agent = createSellerAgent();
+  const commitment = commitmentFixture.object;
+
+  await assert.rejects(
+    () =>
+      agent.provenFetch({
+        commitment,
+        callIndex: 0,
+        request: { host: "api.openai.com", path: "/v1/wrong", method: "POST" },
+        declaredModel: "gpt-4o-mini",
+        taskNonce: TASK_NONCE
+      }),
+    /request.path.*does not match commitment.target.path/
+  );
+});
+
+test("provenFetch rejects request with mismatched method", async () => {
+  const agent = createSellerAgent();
+  const commitment = commitmentFixture.object;
+
+  await assert.rejects(
+    () =>
+      agent.provenFetch({
+        commitment,
+        callIndex: 0,
+        request: { host: "api.openai.com", path: "/v1/chat/completions", method: "GET" },
+        declaredModel: "gpt-4o-mini",
+        taskNonce: TASK_NONCE
+      }),
+    /request.method.*does not match commitment.target.method/
+  );
+});
+
+test("provenFetch rejects declaredModel not in allowedModels", async () => {
+  const agent = createSellerAgent();
+  const commitment = commitmentFixture.object;
+
+  await assert.rejects(
+    () =>
+      agent.provenFetch({
+        commitment,
+        callIndex: 0,
+        request: { host: "api.openai.com", path: "/v1/chat/completions", method: "POST" },
+        declaredModel: "gpt-3.5-turbo",
+        taskNonce: TASK_NONCE
+      }),
+    /declaredModel.*is not in commitment.allowedModels/
+  );
+});

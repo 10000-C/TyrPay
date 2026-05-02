@@ -1,9 +1,8 @@
-import { keccak256, toUtf8Bytes } from "ethers";
-
 import {
   SCHEMA_VERSIONS,
   assertExecutionCommitment,
   assertProofBundle,
+  buildCallIntentHash,
   buildTaskContext,
   hashExecutionCommitment,
   hashObject,
@@ -21,7 +20,7 @@ import {
   type URI,
   type UnixMillis
 } from "@fulfillpay/sdk-core";
-import type { StoragePointer, StorageAdapter } from "@fulfillpay/storage-adapter";
+import type { StorageAdapter } from "@fulfillpay/storage-adapter";
 import type { ZkTlsAdapter, ZkTlsReceiptContext, ZkTlsRequestEvidence } from "@fulfillpay/zktls-adapter";
 
 import type {
@@ -43,7 +42,7 @@ export interface ProvenFetchInput {
   callIndex: number;
   /** The request evidence to send */
   request: ZkTlsRequestEvidence;
-  /** The declared model for this call */
+  /** The declared model for this call — MUST be in commitment.allowedModels */
   declaredModel: string;
   /** Task nonce (from on-chain task) */
   taskNonce: Bytes32;
@@ -167,11 +166,35 @@ export class SellerAgent {
   async provenFetch(input: ProvenFetchInput): Promise<ProvenFetchOutput> {
     assertExecutionCommitment(input.commitment);
 
+    // Validate endpoint matches commitment target (architecture doc §4.2)
+    if (input.request.host !== input.commitment.target.host) {
+      throw new TypeError(
+        `request.host "${input.request.host}" does not match commitment.target.host "${input.commitment.target.host}".`
+      );
+    }
+    if (input.request.path !== input.commitment.target.path) {
+      throw new TypeError(
+        `request.path "${input.request.path}" does not match commitment.target.path "${input.commitment.target.path}".`
+      );
+    }
+    if (input.request.method.toUpperCase() !== input.commitment.target.method) {
+      throw new TypeError(
+        `request.method "${input.request.method.toUpperCase()}" does not match commitment.target.method "${input.commitment.target.method}".`
+      );
+    }
+
+    // Validate declaredModel is in commitment.allowedModels
+    if (!input.commitment.allowedModels.includes(input.declaredModel)) {
+      throw new TypeError(
+        `declaredModel "${input.declaredModel}" is not in commitment.allowedModels [${input.commitment.allowedModels.join(", ")}].`
+      );
+    }
+
     const taskContext = this.buildTaskContextFromCommitment(input.commitment, normalizeBytes32(input.taskNonce, "taskNonce"));
     const callIntentHash = computeCallIntentHash(taskContext, input.callIndex, input.request, input.declaredModel);
 
     // Call the zkTLS adapter's provenFetch
-    const provenFetchInput = {
+    const provenFetchInput: Record<string, unknown> = {
       taskContext,
       callIndex: input.callIndex,
       callIntentHash,
@@ -179,7 +202,7 @@ export class SellerAgent {
       declaredModel: input.declaredModel
     };
 
-    const result = await this.zkTlsAdapter.provenFetch(provenFetchInput as never);
+    const result = await this.zkTlsAdapter.provenFetch(provenFetchInput as Parameters<typeof this.zkTlsAdapter.provenFetch>[0]);
 
     // Upload the raw proof to storage first to get a URI
     const rawProofPointer = await this.storageAdapter.putObject(result.rawProof, {
@@ -337,6 +360,9 @@ export class SellerAgent {
 
 /**
  * Compute a callIntentHash from task context and call details.
+ *
+ * Uses sdk-core's canonical JSON hashing via `buildCallIntentHash` to ensure
+ * hash alignment across all modules (Seller SDK, Verifier, Contracts, E2E).
  */
 function computeCallIntentHash(
   taskContext: TaskContext,
@@ -344,25 +370,19 @@ function computeCallIntentHash(
   request: { host: string; path: string; method: string; body?: unknown },
   declaredModel: string
 ): Bytes32 {
-  // Import hashCallIntent from sdk-core
-  const taskContextHash = hashObject(taskContext);
-
-  // Build request body hash
+  // Compute requestBodyHash using canonical JSON (not JSON.stringify)
+  // per docs/protocol/canonicalization-and-hashing.md
   const requestBodyHash = request.body !== undefined
-    ? keccak256(toUtf8Bytes(JSON.stringify(request.body))) as Bytes32
-    : keccak256(toUtf8Bytes("")) as Bytes32;
+    ? hashObject(request.body)
+    : hashObject("");
 
-  // Build the CallIntent hash manually
-  const callIntent = {
-    schemaVersion: SCHEMA_VERSIONS.callIntent,
-    taskContextHash,
+  return buildCallIntentHash({
+    taskContext,
     callIndex,
     host: request.host,
     path: request.path,
     method: request.method.toUpperCase(),
     declaredModel,
     requestBodyHash
-  };
-
-  return hashObject(callIntent);
+  });
 }
