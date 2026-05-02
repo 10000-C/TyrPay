@@ -8,3 +8,4 @@ cache/
 .pnpm-store/
 typechain-types/
 deployments/
+.test-dist/
