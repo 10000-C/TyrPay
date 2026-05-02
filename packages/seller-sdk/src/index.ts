@@ -149,3 +149,5 @@ export async function buildAndUploadMockProofBundle(
     proofBundlePointer
   };
 }
+export * from "./types.js";
+export * from "./seller-agent.js";

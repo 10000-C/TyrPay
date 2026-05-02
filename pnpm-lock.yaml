@@ -38,7 +38,17 @@ importers:
         specifier: ^22.15.30
         version: 22.19.17
 
-  packages/buyer-sdk: {}
+  packages/buyer-sdk:
+    dependencies:
+      '@fulfillpay/sdk-core':
+        specifier: workspace:*
+        version: link:../sdk-core
+      '@fulfillpay/storage-adapter':
+        specifier: workspace:*
+        version: link:../storage-adapter
+      ethers:
+        specifier: ^6.16.0
+        version: 6.16.0
 
   packages/contracts:
     devDependencies:
