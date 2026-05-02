@@ -88,7 +88,7 @@ export interface OnChainTask {
 export type ChainTaskLike = OnChainTask | Record<string, unknown>;
 
 export interface SettlementTaskReader {
-  getTask(taskId: Bytes32): Promise<ChainTaskLike>;
+  getTask(taskId: Bytes32): Promise<OnChainTask>;
   getChainId(): Promise<UIntLike>;
   getSettlementContractAddress(): Promise<string>;
   isProofBundleConsumed(proofBundleHash: Bytes32): Promise<boolean>;
@@ -432,6 +432,9 @@ export class PrismaProofConsumptionRegistry implements ProofConsumptionRegistry 
       throw new ProofAlreadyConsumedError("Proof bundle contains duplicate proof consumption keys.");
     }
 
+    // The hasAny pre-check is a fast path for the common case.
+    // The DB unique constraint in createMany below is the true serialization point
+    // and handles concurrent verifier instances racing to consume the same keys.
     if (await this.hasAny(keys)) {
       throw new ProofAlreadyConsumedError("One or more proof consumption keys were already consumed.");
     }
@@ -475,6 +478,10 @@ export class CentralizedVerifier {
   async verifyTask(taskIdInput: string, options: VerifyTaskOptions = {}): Promise<VerificationResult> {
     const taskId = normalizeBytes32(taskIdInput, "taskId");
     const inputs = await this.loadInputs(taskId);
+    const verifier = await this.getVerifierAddress();
+    const verifiedAt = normalizeUIntString(await this.clock(), "verifiedAt") as UnixMillis;
+    await this.assertVerifierCanSign(inputs, verifier, verifiedAt);
+
     const evaluation = await this.evaluate(inputs);
 
     if (evaluation.existingConsumptionRecord !== null) {
@@ -489,7 +496,7 @@ export class CentralizedVerifier {
       );
     }
 
-    const unsignedReport = await this.buildUnsignedReport(inputs, evaluation);
+    const unsignedReport = this.buildUnsignedReport(inputs, evaluation, verifier, verifiedAt);
     const report = await signVerificationReport(unsignedReport, this.options.signer);
 
     let consumed = false;
@@ -514,14 +521,13 @@ export class CentralizedVerifier {
   }
 
   async loadInputs(taskId: Bytes32): Promise<VerificationInputs> {
-    const [chainId, settlementContract, proofSubmissionGracePeriod, verificationTimeout, taskLike] = await Promise.all([
+    const [chainId, settlementContract, proofSubmissionGracePeriod, verificationTimeout, task] = await Promise.all([
       this.options.settlement.getChainId(),
       this.options.settlement.getSettlementContractAddress(),
       this.options.settlement.getProofSubmissionGracePeriod(),
       this.options.settlement.getVerificationTimeout(),
       this.options.settlement.getTask(taskId)
     ]);
-    const task = normalizeChainTask(taskLike);
 
     if (task.status !== "PROOF_SUBMITTED") {
       throw new VerifierInvalidTaskStateError(`Task ${task.taskId} must be PROOF_SUBMITTED before verification.`);
@@ -568,9 +574,11 @@ export class CentralizedVerifier {
   async evaluate(inputs: VerificationInputs): Promise<VerificationEvaluation> {
     const { task, commitment, proofBundle, rawProofs } = inputs;
     const consumptionKeys = buildProofConsumptionKeys(proofBundle);
-    const receiptProofs = await this.verifyReceiptProofs(proofBundle.receipts, rawProofs);
-    const existingConsumptionRecord = await this.consumptionRegistry.findAny(consumptionKeys);
-    const proofBundleAlreadyConsumed = await this.options.settlement.isProofBundleConsumed(task.proofBundleHash);
+    const [receiptProofs, existingConsumptionRecord, proofBundleAlreadyConsumed] = await Promise.all([
+      this.verifyReceiptProofs(proofBundle.receipts, rawProofs),
+      this.consumptionRegistry.findAny(consumptionKeys),
+      this.options.settlement.isProofBundleConsumed(task.proofBundleHash)
+    ]);
     const expectedTaskContext = buildExpectedTaskContext(inputs);
     const receiptAcceptedForUsage = proofBundle.receipts.map((receipt, index) =>
       isReceiptAcceptedForUsage(
@@ -597,10 +605,11 @@ export class CentralizedVerifier {
         proofBundle.receipts.every((receipt, index) =>
           isReceiptBoundToExpectedContext(receipt, rawProofs[index], expectedTaskContext, receiptProofs[index])
         ),
-      callIndicesUnique: hasUniqueValues(proofBundle.receipts.map((receipt) => receipt.callIndex)),
+      callIndicesUnique:
+        hasUniqueValues(proofBundle.receipts.map((receipt) => receipt.callIndex)) &&
+        !hasDuplicateConsumptionKey(consumptionKeys),
       proofNotConsumed:
         existingConsumptionRecord === null &&
-        !hasDuplicateConsumptionKey(consumptionKeys) &&
         proofBundleAlreadyConsumed !== true,
       withinTaskWindow: receiptProofs.every(
         (proof) => hasAcceptedReceiptEvidence(proof) && isWithinTaskWindow(proof.evidence.observedAt, task, commitment)
@@ -618,20 +627,18 @@ export class CentralizedVerifier {
       consumptionKeys,
       existingConsumptionRecord,
       proofBundleAlreadyConsumed,
-      proofsEligibleForConsumption: checks.zkTlsProofValid && checks.taskContextMatched
+      proofsEligibleForConsumption: checks.zkTlsProofValid && checks.taskContextMatched && checks.callIndicesUnique
     };
   }
 
-  private async buildUnsignedReport(
+  private buildUnsignedReport(
     inputs: VerificationInputs,
-    evaluation: VerificationEvaluation
-  ): Promise<UnsignedVerificationReport> {
+    evaluation: VerificationEvaluation,
+    verifier: Address,
+    verifiedAt: UnixMillis
+  ): UnsignedVerificationReport {
     const passed = REQUIRED_VERIFICATION_CHECKS.every((check) => evaluation.checks[check]);
     const settlementAction = passed ? "RELEASE" : "REFUND";
-    const verifier = await this.getVerifierAddress();
-    const verifiedAt = normalizeUIntString(await this.clock(), "verifiedAt") as UnixMillis;
-
-    await this.assertVerifierCanSign(inputs, verifier, verifiedAt);
 
     const report: UnsignedVerificationReport = {
       schemaVersion: SCHEMA_VERSIONS.verificationReport,
@@ -681,11 +688,10 @@ export class CentralizedVerifier {
             receiptMatchesVerifiedRawProof: evidenceMatchesReceipt(evidence, receipt),
             evidence
           };
-        } catch {
-          return {
-            receiptMatchesVerifiedRawProof: false,
-            evidence: null
-          };
+        } catch (error) {
+          throw new VerifierInputUnavailableError(
+            `zkTLS proof verification for provider ${receipt.provider} is temporarily unavailable: ${toErrorMessage(error)}`
+          );
         }
       })
     );
