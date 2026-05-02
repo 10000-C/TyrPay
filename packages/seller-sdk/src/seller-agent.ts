@@ -22,7 +22,7 @@ import {
   type UnixMillis
 } from "@fulfillpay/sdk-core";
 import type { StoragePointer, StorageAdapter } from "@fulfillpay/storage-adapter";
-import type { ZkTlsAdapter, ZkTlsReceiptContext, ProvenFetchResult } from "@fulfillpay/zktls-adapter";
+import type { ZkTlsAdapter, ZkTlsReceiptContext, ZkTlsRequestEvidence } from "@fulfillpay/zktls-adapter";
 
 import type {
   SellerConfig,
@@ -42,7 +42,7 @@ export interface ProvenFetchInput {
   /** Call index for this particular fetch */
   callIndex: number;
   /** The request evidence to send */
-  request: Parameters<ZkTlsAdapter["provenFetch"]>[0] extends { request: infer R } ? R : never;
+  request: ZkTlsRequestEvidence;
   /** The declared model for this call */
   declaredModel: string;
   /** Task nonce (from on-chain task) */
