@@ -1,3 +1,5 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+
 import {
   SCHEMA_VERSIONS,
   assertExecutionCommitment,
@@ -207,6 +209,7 @@ export interface VerificationEvaluation {
   consumptionKeys: ProofConsumptionKeys;
   existingConsumptionRecord: ProofConsumptionRecord | null;
   proofBundleAlreadyConsumed: boolean;
+  proofsEligibleForConsumption: boolean;
 }
 
 export interface VerificationResult {
@@ -214,6 +217,16 @@ export interface VerificationResult {
   checks: RequiredVerificationChecks;
   aggregateUsage: AggregateUsage;
   consumed: boolean;
+}
+
+export interface VerifierHttpServerOptions {
+  verifier: CentralizedVerifier;
+  pathPrefix?: string;
+}
+
+export interface VerifyTaskHttpRequest {
+  taskId: string;
+  markProofsConsumed?: boolean;
 }
 
 export interface SettlementReportStruct {
@@ -480,7 +493,7 @@ export class CentralizedVerifier {
     const report = await signVerificationReport(unsignedReport, this.options.signer);
 
     let consumed = false;
-    if ((options.markProofsConsumed ?? true) && evaluation.checks.proofNotConsumed) {
+    if ((options.markProofsConsumed ?? true) && evaluation.checks.proofNotConsumed && evaluation.proofsEligibleForConsumption) {
       const reportHash = report.reportHash ?? hashVerificationReport(report);
       await this.consumptionRegistry.markConsumed(evaluation.consumptionKeys, {
         taskId: inputs.task.taskId,
@@ -556,10 +569,20 @@ export class CentralizedVerifier {
     const { task, commitment, proofBundle, rawProofs } = inputs;
     const consumptionKeys = buildProofConsumptionKeys(proofBundle);
     const receiptProofs = await this.verifyReceiptProofs(proofBundle.receipts, rawProofs);
-    const aggregateUsage = aggregateAcceptedUsage(receiptProofs);
     const existingConsumptionRecord = await this.consumptionRegistry.findAny(consumptionKeys);
     const proofBundleAlreadyConsumed = await this.options.settlement.isProofBundleConsumed(task.proofBundleHash);
     const expectedTaskContext = buildExpectedTaskContext(inputs);
+    const receiptAcceptedForUsage = proofBundle.receipts.map((receipt, index) =>
+      isReceiptAcceptedForUsage(
+        receipt,
+        rawProofs[index],
+        receiptProofs[index],
+        expectedTaskContext,
+        task,
+        commitment
+      )
+    );
+    const aggregateUsage = aggregateAcceptedUsage(receiptProofs, receiptAcceptedForUsage);
 
     const checks: RequiredVerificationChecks = {
       commitmentHashMatched: hashExecutionCommitment(commitment) === task.commitmentHash,
@@ -594,7 +617,8 @@ export class CentralizedVerifier {
       aggregateUsage,
       consumptionKeys,
       existingConsumptionRecord,
-      proofBundleAlreadyConsumed
+      proofBundleAlreadyConsumed,
+      proofsEligibleForConsumption: checks.zkTlsProofValid && checks.taskContextMatched
     };
   }
 
@@ -713,6 +737,43 @@ export class CentralizedVerifier {
 
 export function createVerifierService(options: CentralizedVerifierOptions): CentralizedVerifier {
   return new CentralizedVerifier(options);
+}
+
+export function createVerifierHttpServer(options: VerifierHttpServerOptions): Server {
+  const pathPrefix = normalizeHttpPathPrefix(options.pathPrefix ?? "");
+
+  return createServer(async (request, response) => {
+    try {
+      const url = new URL(request.url ?? "/", "http://localhost");
+      const pathname = stripPathPrefix(url.pathname, pathPrefix);
+
+      if (request.method === "GET" && pathname === "/health") {
+        writeJson(response, 200, { status: "ok" });
+        return;
+      }
+
+      if (request.method === "POST" && pathname === "/verify") {
+        const body = await readJsonBody<VerifyTaskHttpRequest>(request);
+        if (!body || typeof body.taskId !== "string") {
+          writeJson(response, 400, { error: "VerifierBadRequest", message: "POST /verify requires string taskId." });
+          return;
+        }
+
+        const result = await options.verifier.verifyTask(body.taskId, {
+          markProofsConsumed: body.markProofsConsumed
+        });
+        writeJson(response, 200, result);
+        return;
+      }
+
+      writeJson(response, 404, { error: "VerifierRouteNotFound", message: `No route for ${request.method} ${url.pathname}.` });
+    } catch (error) {
+      writeJson(response, statusForHttpError(error), {
+        error: error instanceof Error ? error.name : "VerifierError",
+        message: toErrorMessage(error)
+      });
+    }
+  });
 }
 
 export async function signVerificationReport(
@@ -946,10 +1007,10 @@ function buildExpectedTaskContext(inputs: VerificationInputs): TaskContext {
   };
 }
 
-function aggregateAcceptedUsage(receiptProofs: ReceiptProofVerification[]): AggregateUsage {
+function aggregateAcceptedUsage(receiptProofs: ReceiptProofVerification[], acceptedReceipts: boolean[]): AggregateUsage {
   return {
-    totalTokens: receiptProofs.reduce((total, proof) => {
-      if (!proof.receiptMatchesVerifiedRawProof || !proof.evidence) {
+    totalTokens: receiptProofs.reduce((total, proof, index) => {
+      if (!acceptedReceipts[index] || !hasAcceptedReceiptEvidence(proof)) {
         return total;
       }
 
@@ -1010,6 +1071,23 @@ function providerProofContextMatchesReceipt(
     proofContext.seller === expectedTaskContext.seller &&
     proofContext.callIndex === receipt.callIndex &&
     proofContext.callIntentHash === receipt.callIntentHash
+  );
+}
+
+function isReceiptAcceptedForUsage(
+  receipt: DeliveryReceipt,
+  rawProof: unknown,
+  proof: ReceiptProofVerification,
+  expectedTaskContext: TaskContext,
+  task: OnChainTask,
+  commitment: ExecutionCommitment
+): boolean {
+  return (
+    hasAcceptedReceiptEvidence(proof) &&
+    isEndpointMatched(commitment, proof.evidence) &&
+    isReceiptBoundToExpectedContext(receipt, rawProof, expectedTaskContext, proof) &&
+    isWithinTaskWindow(proof.evidence.observedAt, task, commitment) &&
+    commitment.allowedModels.includes(proof.evidence.extracted.model)
   );
 }
 
@@ -1293,6 +1371,71 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isExpectedHashRequiredError(error: unknown): boolean {
   return error instanceof Error && error.message.includes("expectedHash is required");
+}
+
+function normalizeHttpPathPrefix(pathPrefix: string): string {
+  const trimmed = pathPrefix.trim();
+  if (!trimmed || trimmed === "/") {
+    return "";
+  }
+
+  return trimmed.startsWith("/") ? trimmed.replace(/\/+$/, "") : `/${trimmed.replace(/\/+$/, "")}`;
+}
+
+function stripPathPrefix(pathname: string, pathPrefix: string): string {
+  if (!pathPrefix) {
+    return pathname;
+  }
+
+  if (pathname === pathPrefix) {
+    return "/";
+  }
+
+  return pathname.startsWith(`${pathPrefix}/`) ? pathname.slice(pathPrefix.length) : pathname;
+}
+
+async function readJsonBody<T>(request: IncomingMessage): Promise<T> {
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  const text = Buffer.concat(chunks).toString("utf8");
+  if (!text) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
+}
+
+function writeJson(response: ServerResponse, statusCode: number, payload: unknown): void {
+  response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(payload));
+}
+
+function statusForHttpError(error: unknown): number {
+  if (error instanceof ProofAlreadyConsumedError) {
+    return 409;
+  }
+
+  if (error instanceof VerifierUnauthorizedError) {
+    return 403;
+  }
+
+  if (error instanceof VerifierInputUnavailableError) {
+    return 503;
+  }
+
+  if (
+    error instanceof VerifierInputIntegrityError ||
+    error instanceof VerifierInvalidTaskStateError ||
+    error instanceof TypeError
+  ) {
+    return 400;
+  }
+
+  return 500;
 }
 
 function toErrorMessage(error: unknown): string {

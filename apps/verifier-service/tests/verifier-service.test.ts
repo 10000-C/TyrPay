@@ -24,6 +24,7 @@ import {
   REQUIRED_VERIFICATION_CHECKS,
   VerifierInputIntegrityError,
   VerifierInputUnavailableError,
+  createVerifierHttpServer,
   signVerificationReport,
   toSettlementReportStruct,
   type OnChainTask,
@@ -216,8 +217,9 @@ test("fails when the observed model is outside the commitment", async () => {
   assert.equal(result.report.passed, false);
   assert.equal(result.report.settlement.action, "REFUND");
   assert.equal(result.checks.modelMatched, false);
-  assert.equal(result.checks.usageSatisfied, true);
+  assert.equal(result.checks.usageSatisfied, false);
   assert.equal(result.checks.zkTlsProofValid, true);
+  assert.equal(result.aggregateUsage.totalTokens, 0);
 });
 
 test("fails when aggregate usage is below the committed minimum", async () => {
@@ -237,6 +239,8 @@ test("fails when the proof timestamp is outside the task window", async () => {
   assert.equal(result.report.passed, false);
   assert.equal(result.checks.withinTaskWindow, false);
   assert.equal(result.checks.modelMatched, true);
+  assert.equal(result.checks.usageSatisfied, false);
+  assert.equal(result.aggregateUsage.totalTokens, 0);
 });
 
 test("allows proof submitted after deadline when receipts were observed before deadline", async () => {
@@ -262,6 +266,8 @@ test("fails late proof submitted within grace when receipt was observed after de
   assert.equal(result.report.passed, false);
   assert.equal(result.checks.withinTaskWindow, false);
   assert.equal(result.checks.zkTlsProofValid, true);
+  assert.equal(result.checks.usageSatisfied, false);
+  assert.equal(result.aggregateUsage.totalTokens, 0);
   assert.equal(result.report.settlement.action, "REFUND");
 });
 
@@ -280,6 +286,8 @@ test("fails when receipt context differs from the on-chain task", async () => {
   assert.equal(result.report.passed, false);
   assert.equal(result.checks.taskContextMatched, false);
   assert.equal(result.checks.zkTlsProofValid, true);
+  assert.equal(result.checks.usageSatisfied, false);
+  assert.equal(result.aggregateUsage.totalTokens, 0);
 });
 
 test("fails when call intent hash does not match the proven request semantics", async () => {
@@ -291,7 +299,8 @@ test("fails when call intent hash does not match the proven request semantics", 
   assert.equal(result.checks.zkTlsProofValid, true);
   assert.equal(result.checks.endpointMatched, true);
   assert.equal(result.checks.modelMatched, true);
-  assert.equal(result.checks.usageSatisfied, true);
+  assert.equal(result.checks.usageSatisfied, false);
+  assert.equal(result.aggregateUsage.totalTokens, 0);
 });
 
 test("rejects verifier-side proof replay after a report is produced", async () => {
@@ -320,6 +329,24 @@ test("rejects proof replay when a consumption key belongs to another task", asyn
   await assert.rejects(() => fixture.verifier.verifyTask(fixture.task.taskId), /already reserved by task/);
 });
 
+test("does not consume replay keys from proofs that fail verification", async () => {
+  const consumptionRegistry = new InMemoryProofConsumptionRegistry();
+  const fixture = await buildFixture({
+    consumptionRegistry,
+    mutateReceipt: (receipt) => ({
+      ...receipt,
+      responseHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    })
+  });
+  const keys = buildProofConsumptionKeys(fixture.proofBundle);
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId);
+
+  assert.equal(result.report.passed, false);
+  assert.equal(result.checks.zkTlsProofValid, false);
+  assert.equal(result.consumed, false);
+  assert.equal(await consumptionRegistry.hasAny(keys), false);
+});
+
 test("rejects report generation when the proof bundle was already consumed on-chain", async () => {
   const fixture = await buildFixture({ proofBundleConsumed: true });
 
@@ -327,6 +354,40 @@ test("rejects report generation when the proof bundle was already consumed on-ch
     () => fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false }),
     /already consumed by the settlement contract/
   );
+});
+
+test("serves verification reports over the HTTP API", async () => {
+  const fixture = await buildFixture();
+  const server = createVerifierHttpServer({ verifier: fixture.verifier });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const address = server.address();
+    if (typeof address !== "object" || address === null) {
+      throw new TypeError("Expected verifier HTTP server to listen on a TCP address.");
+    }
+
+    const response = await fetch(`http://127.0.0.1:${address.port}/verify`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        taskId: fixture.task.taskId,
+        markProofsConsumed: false
+      })
+    });
+    const body = (await response.json()) as { report: { passed: boolean }; consumed: boolean };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.report.passed, true);
+    assert.equal(body.consumed, false);
+  } finally {
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve()))
+    );
+  }
 });
 
 test("fails when receipt usage is inflated beyond the raw proof extraction", async () => {

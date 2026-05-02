@@ -19,14 +19,14 @@
     "settlementAction": 1,
     "settlementAmount": "1000000",
     "verifiedAt": "1735686900000",
-    "reportHash": "0xc651276636791738328a0ce58cc3f52ef786f1ef1814144ea8a6857e31f0e715"
+    "reportHash": "0x4e0608cf3e990bf12dad76e616c9bb51f4eb117aa140cc94001868f4fa328a82"
   },
   "typeHashes": {
     "nameHash": "0xe2c49266b3e4e9e046bed8bc623397e17a74c1a49d1e0037a065a7f8510a3c80",
     "versionHash": "0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6",
     "domainSeparator": "0x24b3aa9c4fe0856f88593c669f4845c91c217001e4dd664a60975b6d9342f55b",
-    "structHash": "0xd319f365b0afdf45f929b60581a6dc69ab72e5be9d79bc1e0e32e565f038d34f",
-    "digest": "0x689219a247fb2fda3c61a7f570712a2ec00ae94ea5cf24b8bfaa09e6d8ca3bdb"
+    "structHash": "0x899a12b1df38bbe6e5e71c221cde04a6f33e6c287fe121ef47b087f8592c40d0",
+    "digest": "0xe8de9fa9e836c29c9d4b79a9e0f369e9ea298b655f62f0acf0675b99ae73e553"
   },
   "fixture": "test/fixtures/protocol/verification-reports/verification-report.pass-basic.unsigned.json"
 }
