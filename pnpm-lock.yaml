@@ -52,6 +52,21 @@ importers:
 
   packages/contracts:
     devDependencies:
+      '@fulfillpay/buyer-sdk':
+        specifier: workspace:*
+        version: link:../buyer-sdk
+      '@fulfillpay/sdk-core':
+        specifier: workspace:*
+        version: link:../sdk-core
+      '@fulfillpay/seller-sdk':
+        specifier: workspace:*
+        version: link:../seller-sdk
+      '@fulfillpay/storage-adapter':
+        specifier: workspace:*
+        version: link:../storage-adapter
+      '@fulfillpay/zktls-adapter':
+        specifier: workspace:*
+        version: link:../zktls-adapter
       '@nomicfoundation/hardhat-toolbox':
         specifier: ^5.0.0
         version: 5.0.0(cb65419f6d03eab7ca16d431ae77f05b)
@@ -64,6 +79,9 @@ importers:
       '@types/node':
         specifier: ^22.15.30
         version: 22.19.17
+      chai:
+        specifier: ^4.5.0
+        version: 4.5.0
       dotenv:
         specifier: ^16.5.0
         version: 16.6.1
@@ -101,6 +119,13 @@ importers:
       '@fulfillpay/zktls-adapter':
         specifier: workspace:*
         version: link:../zktls-adapter
+      ethers:
+        specifier: ^6.16.0
+        version: 6.16.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.19.17
 
   packages/shared: {}
 
