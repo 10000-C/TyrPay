@@ -27,7 +27,7 @@ import {
   MockERC20__factory,
   VerifierRegistry,
   VerifierRegistry__factory
-} from "../../../typechain-types";
+} from "../../../packages/contracts/typechain-types";
 
 export const GRACE_PERIOD_MS = 15n * 60n * 1000n;
 export const VERIFICATION_TIMEOUT_MS = 60n * 60n * 1000n;

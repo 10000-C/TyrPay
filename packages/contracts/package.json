@@ -11,7 +11,8 @@
     "node": "hardhat node",
     "smoke:local": "hardhat run scripts/smoke-local.ts --network localhost",
     "test": "hardhat test",
-    "test:e2e": "hardhat test test/e2e/e2e-happy-path.test.ts test/e2e/e2e-invalid-signature.test.ts test/e2e/e2e-replay-protection.test.ts test/e2e/e2e-timeout-refund.test.ts",
+    "test:e2e": "hardhat test ../../test/e2e/e2e-happy-path.test.ts ../../test/e2e/e2e-invalid-signature.test.ts ../../test/e2e/e2e-replay-protection.test.ts ../../test/e2e/e2e-timeout-refund.test.ts",
+    "test:red-team": "hardhat test ../../test/e2e/e2e-red-team-boundary.test.ts",
     "test:coverage": "hardhat coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -20,6 +21,7 @@
     "@fulfillpay/sdk-core": "workspace:*",
     "@fulfillpay/seller-sdk": "workspace:*",
     "@fulfillpay/storage-adapter": "workspace:*",
+    "@fulfillpay/verifier-service": "workspace:*",
     "@fulfillpay/zktls-adapter": "workspace:*",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@openzeppelin/contracts": "^4.9.6",
