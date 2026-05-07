@@ -1,0 +1,39 @@
+{
+  "name": "verification-report.bad-verifier.unsigned",
+  "objectType": "VerificationReportUnsigned",
+  "object": {
+    "schemaVersion": "fulfillpay.verification-report.v1",
+    "chainId": "31337",
+    "settlementContract": "0x4444444444444444444444444444444444444444",
+    "taskId": "0x5555555555555555555555555555555555555555555555555555555555555555",
+    "buyer": "0x1111111111111111111111111111111111111111",
+    "seller": "0x2222222222222222222222222222222222222222",
+    "commitmentHash": "0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a",
+    "proofBundleHash": "0xcb24838e336e57d8398dc543b2fa406471f724b26321ab4f3cce4814891de3d7",
+    "passed": true,
+    "checks": {
+      "callIndicesUnique": true,
+      "commitmentHashMatched": true,
+      "endpointMatched": true,
+      "modelMatched": true,
+      "proofBundleHashMatched": true,
+      "proofNotConsumed": true,
+      "taskContextMatched": true,
+      "usageSatisfied": true,
+      "withinTaskWindow": true,
+      "zkTlsProofValid": true
+    },
+    "aggregateUsage": {
+      "totalTokens": 128
+    },
+    "settlement": {
+      "action": "RELEASE",
+      "amount": "1000000"
+    },
+    "verifier": "0x8888888888888888888888888888888888888888",
+    "verifiedAt": "1735686900000"
+  },
+  "canonical": null,
+  "hash": null,
+  "notes": "verifier = 0x8888… is NOT registered in the VerifierRegistry. Settlement contract check: ECDSA recover of EIP-712 signature gives an address not in the registry → UnauthorizedVerifier revert. Settlement never executes."
+}

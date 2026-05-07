@@ -7,12 +7,16 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "corepack pnpm run build && corepack pnpm --dir ../contracts exec -- hardhat run scripts/run-buyer-sdk-integration.ts",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/tests/buyer-sdk.test.js",
+    "test:integration": "corepack pnpm run build && corepack pnpm --dir ../contracts exec -- hardhat run scripts/run-buyer-sdk-integration.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@fulfillpay/sdk-core": "workspace:*",
     "@fulfillpay/storage-adapter": "workspace:*",
     "ethers": "^6.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30"
   }
 }
