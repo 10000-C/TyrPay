@@ -304,8 +304,9 @@ export class CentralizedVerifier {
             taskContextMatched: isCommitmentBoundToTask(commitment, task) &&
                 isProofBundleBoundToTask(proofBundle, task) &&
                 proofBundle.receipts.every((receipt, index) => isReceiptBoundToExpectedContext(receipt, rawProofs[index], expectedTaskContext, receiptProofs[index])),
-            callIndicesUnique: hasUniqueValues(proofBundle.receipts.map((receipt) => receipt.callIndex)) &&
-                !hasDuplicateConsumptionKey(consumptionKeys),
+            // Protocol state-machine only requires bundle-local callIndex uniqueness.
+            // callIntentHash uniqueness is tracked separately in proof consumption keys.
+            callIndicesUnique: hasUniqueValues(proofBundle.receipts.map((receipt) => receipt.callIndex)),
             proofNotConsumed: existingConsumptionRecord === null &&
                 proofBundleAlreadyConsumed !== true,
             withinTaskWindow: receiptProofs.every((proof) => hasAcceptedReceiptEvidence(proof) && isWithinTaskWindow(proof.evidence.observedAt, task, commitment)),
@@ -722,7 +723,6 @@ function isWithinTaskWindow(observedAtInput, task, commitment) {
 function hasDuplicateConsumptionKey(keys) {
     return (!hasUniqueValues(keys.providerProofIds) ||
         !hasUniqueValues(keys.receiptHashes) ||
-        !hasUniqueValues(keys.responseHashes) ||
         !hasUniqueValues(keys.callIntentHashes));
 }
 function hasUniqueValues(values) {

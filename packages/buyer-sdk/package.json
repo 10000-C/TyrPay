@@ -7,7 +7,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "corepack pnpm run build && corepack pnpm --dir ../contracts exec -- hardhat run scripts/run-buyer-sdk-integration.ts",
+    "test": "corepack pnpm run build && cd ../contracts && corepack pnpm exec hardhat run scripts/run-buyer-sdk-integration.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

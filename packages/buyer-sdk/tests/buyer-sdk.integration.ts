@@ -58,6 +58,7 @@ export async function runBuyerSdkIntegration(ethers: any) {
   });
 
   await exerciseHappyPath({
+    ethers,
     buyerSdk,
     storage,
     reportResolver,
@@ -120,6 +121,7 @@ export async function runBuyerSdkIntegration(ethers: any) {
 }
 
 async function exerciseHappyPath(input: {
+  ethers: any;
   buyerSdk: BuyerSdk;
   storage: MemoryStorageAdapter;
   reportResolver: InMemoryReportResolver;
@@ -196,7 +198,7 @@ async function exerciseHappyPath(input: {
   assert.equal(fundedTask.status, "FUNDED");
   assert.equal(await input.buyerSdk.getTaskStatus(created.taskId), "EXECUTING");
 
-  const proofBundleHash = ethers.keccak256(ethers.toUtf8Bytes("buyer-sdk/proof-bundle/pass"));
+  const proofBundleHash = input.ethers.keccak256(input.ethers.toUtf8Bytes("buyer-sdk/proof-bundle/pass"));
   await (
     await input.settlement
       .connect(input.seller)

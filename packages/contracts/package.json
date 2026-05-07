@@ -8,6 +8,8 @@
     "compile": "hardhat compile",
     "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
     "deploy:testnet": "hardhat run scripts/deploy.ts --network testnet",
+    "e2e:mock:testnet": "hardhat run scripts/e2e-mock-testnet.ts --network testnet",
+    "e2e:mock:boundaries:testnet": "hardhat run scripts/e2e-mock-boundaries-testnet.ts --network testnet",
     "node": "hardhat node",
     "smoke:local": "hardhat run scripts/smoke-local.ts --network localhost",
     "test": "hardhat test",

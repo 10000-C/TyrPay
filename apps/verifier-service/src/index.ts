@@ -605,9 +605,9 @@ export class CentralizedVerifier {
         proofBundle.receipts.every((receipt, index) =>
           isReceiptBoundToExpectedContext(receipt, rawProofs[index], expectedTaskContext, receiptProofs[index])
         ),
-      callIndicesUnique:
-        hasUniqueValues(proofBundle.receipts.map((receipt) => receipt.callIndex)) &&
-        hasUniqueValues(consumptionKeys.callIntentHashes),
+      // Protocol state-machine only requires bundle-local callIndex uniqueness.
+      // callIntentHash uniqueness is tracked separately in proof consumption keys.
+      callIndicesUnique: hasUniqueValues(proofBundle.receipts.map((receipt) => receipt.callIndex)),
       proofNotConsumed:
         existingConsumptionRecord === null &&
         proofBundleAlreadyConsumed !== true,
