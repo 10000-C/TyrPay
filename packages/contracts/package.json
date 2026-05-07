@@ -11,7 +11,7 @@
     "node": "hardhat node",
     "smoke:local": "hardhat run scripts/smoke-local.ts --network localhost",
     "test": "hardhat test",
-    "test:e2e": "hardhat test ../../test/e2e/e2e-happy-path.test.ts ../../test/e2e/e2e-invalid-signature.test.ts ../../test/e2e/e2e-replay-protection.test.ts ../../test/e2e/e2e-timeout-refund.test.ts",
+    "test:e2e": "hardhat test ../../test/e2e/e2e-happy-path.test.ts ../../test/e2e/e2e-model-usage.test.ts ../../test/e2e/e2e-replay-protection.test.ts ../../test/e2e/e2e-invalid-verifier.test.ts ../../test/e2e/e2e-boundary-cases.test.ts ../../test/e2e/e2e-timeout-refund.test.ts ../../test/e2e/e2e-invalid-signature.test.ts ../../test/e2e/e2e-eip712-rejection.test.ts ../../test/e2e/e2e-commitment-validation.test.ts ../../test/e2e/e2e-multi-task.test.ts",
     "test:red-team": "hardhat test ../../test/e2e/e2e-red-team-boundary.test.ts",
     "test:coverage": "hardhat coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit"

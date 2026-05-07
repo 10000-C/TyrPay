@@ -29,6 +29,8 @@ export interface VerifierE2eEnvironment extends E2eEnvironment {
 
 /**
  * Deploy full E2E environment with a real verifier HTTP service.
+ * The verifier uses the EVM block clock so that time-based checks stay in
+ * sync with evm_increaseTime calls in tests.
  */
 export async function deployVerifierE2eFixture(): Promise<VerifierE2eEnvironment> {
   const env = await deployE2eFixture();
@@ -45,12 +47,16 @@ export async function deployVerifierE2eFixture(): Promise<VerifierE2eEnvironment
     storage: env.storage,
     signer: env.verifier as unknown as import("@fulfillpay/verifier-service").VerificationReportSigner,
     zktlsAdapters: [env.zkTlsAdapter as unknown as import("@fulfillpay/verifier-service").RawProofVerifier],
-    consumptionRegistry
+    consumptionRegistry,
+    // Use EVM block time so the verifier's clock stays in sync with evm_increaseTime.
+    clock: async () => {
+      const block = await ethers.provider.getBlock("latest");
+      return BigInt(block!.timestamp) * 1000n;
+    }
   });
 
   const httpServer = createVerifierHttpServer({ verifier: verifierService });
 
-  // Listen on a random available port
   const httpServerPort = await new Promise<number>((resolve) => {
     httpServer.listen(0, () => {
       const addr = httpServer.address();
@@ -90,6 +96,7 @@ export async function callVerifier(
 
 /**
  * Verify a task through the real verifier service and settle on-chain.
+ * The caller is owner (index 0) which is sufficient since settle() has no access control.
  */
 export async function verifyAndSettle(input: {
   env: VerifierE2eEnvironment;
@@ -97,7 +104,6 @@ export async function verifyAndSettle(input: {
 }): Promise<{ result: VerificationResult; report: VerificationResult["report"] }> {
   const { env, taskId } = input;
 
-  // Call verifier HTTP service
   const response = await callVerifier(env.verifierBaseUrl, taskId);
 
   if (response.status !== 200) {
@@ -107,12 +113,10 @@ export async function verifyAndSettle(input: {
   const result = response.body as VerificationResult;
   const report = result.report;
 
-  // Convert to on-chain struct and settle
   const reportStruct = toSettlementReportStruct(report);
-
   const signature = report.signature;
-  const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
 
+  const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
   await (await contract.settle(reportStruct, signature)).wait();
 
   return { result, report };

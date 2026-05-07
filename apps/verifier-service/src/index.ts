@@ -607,7 +607,7 @@ export class CentralizedVerifier {
         ),
       callIndicesUnique:
         hasUniqueValues(proofBundle.receipts.map((receipt) => receipt.callIndex)) &&
-        !hasDuplicateConsumptionKey(consumptionKeys),
+        hasUniqueValues(consumptionKeys.callIntentHashes),
       proofNotConsumed:
         existingConsumptionRecord === null &&
         proofBundleAlreadyConsumed !== true,
@@ -1173,7 +1173,6 @@ function hasDuplicateConsumptionKey(keys: ProofConsumptionKeys): boolean {
   return (
     !hasUniqueValues(keys.providerProofIds) ||
     !hasUniqueValues(keys.receiptHashes) ||
-    !hasUniqueValues(keys.responseHashes) ||
     !hasUniqueValues(keys.callIntentHashes)
   );
 }

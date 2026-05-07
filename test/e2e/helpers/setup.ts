@@ -3,11 +3,15 @@ import { ethers } from "hardhat";
 
 import {
   SCHEMA_VERSIONS,
+  buildCallIntentHash,
   hashExecutionCommitment,
+  hashObject,
   hashProofBundle,
+  hashVerificationReport,
   normalizeAddress,
   type Address,
   type Bytes32,
+  type DeliveryReceipt,
   type ExecutionCommitment,
   type ProofBundle,
   type TaskStatus,
@@ -18,7 +22,11 @@ import {
 import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
 import { BuyerSdk } from "@fulfillpay/buyer-sdk";
 import { SellerAgent } from "@fulfillpay/seller-sdk";
-import { MockZkTlsAdapter } from "@fulfillpay/zktls-adapter";
+import {
+  MockZkTlsAdapter,
+  type MockScenario,
+  type MockTimeWindow
+} from "@fulfillpay/zktls-adapter";
 
 import {
   FulfillPaySettlement,
@@ -28,6 +36,8 @@ import {
   VerifierRegistry,
   VerifierRegistry__factory
 } from "../../../packages/contracts/typechain-types";
+
+export { type MockScenario, type MockTimeWindow };
 
 export const GRACE_PERIOD_MS = 15n * 60n * 1000n;
 export const VERIFICATION_TIMEOUT_MS = 60n * 60n * 1000n;
@@ -160,53 +170,150 @@ export async function submitCommitmentOnChain(input: {
   return { commitmentHash: pointer.hash as Bytes32, commitmentURI: pointer.uri };
 }
 
+// ─── Seller proof building blocks ────────────────────────────────────────────
+
 /**
- * Run the full Seller flow: provenFetch → buildProofBundle → upload → submitProofBundleHash.
+ * Compute the callIntentHash for a given call.
+ * Mirrors seller-agent.ts computeCallIntentHash (which is private there).
  */
-export async function sellerFullFlow(input: {
+function computeCallIntentHash(
+  taskContext: import("@fulfillpay/sdk-core").TaskContext,
+  callIndex: number,
+  request: { host: string; path: string; method: string; body?: unknown },
+  declaredModel: string
+): Bytes32 {
+  const requestBodyHash = request.body !== undefined
+    ? hashObject(request.body)
+    : hashObject("");
+
+  return buildCallIntentHash({
+    taskContext,
+    callIndex,
+    host: request.host,
+    path: request.path,
+    method: request.method.toUpperCase(),
+    declaredModel,
+    requestBodyHash
+  });
+}
+
+export interface SellerFetchInput {
   env: E2eEnvironment;
   commitment: ExecutionCommitment;
   taskNonce: Bytes32;
-  scenario?: "pass" | "model_mismatch" | "usage_insufficient";
+  /** 0 by default */
+  callIndex?: number;
+  /** MockZkTlsAdapter scenario. Defaults to "pass". */
+  scenario?: MockScenario;
+  /** Override totalTokens returned by adapter */
   totalTokens?: number;
+  /** Required for usage_insufficient scenario: the commitment's minUsage.totalTokens */
   commitmentMinTokens?: number;
-}): Promise<{ proofBundle: ProofBundle; proofBundleHash: Bytes32; proofBundleURI: URI }> {
+  /** Required for timestamp_before_funded / timestamp_after_deadline scenarios */
+  timeWindow?: MockTimeWindow;
+  /** Override the request body (useful for producing receipts with different callIntentHash) */
+  requestBodyOverride?: unknown;
+}
+
+export interface SellerFetchOutput {
+  receipt: DeliveryReceipt;
+  rawProof: unknown;
+}
+
+/**
+ * Perform a single proven fetch via MockZkTlsAdapter, returning a DeliveryReceipt.
+ * Uses the current EVM block time as observedAt (ensuring withinTaskWindow = true
+ * for pass/model_mismatch/usage_insufficient scenarios).
+ */
+export async function sellerProvenFetch(input: SellerFetchInput): Promise<SellerFetchOutput> {
   const { env, commitment, taskNonce } = input;
-  const contract = (await ethers.getContractAt(
-    "FulfillPaySettlement",
-    env.settlementAddress
-  )).connect(env.seller);
+  const callIndex = input.callIndex ?? 0;
+  const scenario = input.scenario ?? "pass";
 
-  // provenFetch via SellerAgent
-  const provenFetchResult = await env.sellerAgent.provenFetch({
+  const taskContext = env.sellerAgent.buildTaskContextFromCommitment(
     commitment,
-    callIndex: 0,
-    request: {
-      host: commitment.target.host,
-      path: commitment.target.path,
-      method: commitment.target.method,
-      body: { model: "gpt-4.1-mini", messages: [{ role: "user", content: "test" }] }
-    },
-    declaredModel: "gpt-4.1-mini",
     taskNonce
-  });
-
-  // Build proof bundle
-  const proofBundle = env.sellerAgent.buildProofBundle({
-    commitment,
-    receipts: [provenFetchResult.receipt]
-  });
-
-  // Upload to storage
-  const uploadResult = await env.sellerAgent.uploadProofBundle(proofBundle);
-
-  // Submit on-chain
-  await env.sellerAgent.submitProofBundleHash(
-    contract,
-    commitment.taskId,
-    uploadResult.pointer.hash as Bytes32,
-    uploadResult.pointer.uri
   );
+
+  const requestBody = input.requestBodyOverride ?? {
+    model: commitment.allowedModels[0],
+    messages: [{ role: "user", content: "test" }]
+  };
+
+  const request = {
+    host: commitment.target.host,
+    path: commitment.target.path,
+    method: commitment.target.method,
+    body: requestBody
+  };
+
+  const callIntentHash = computeCallIntentHash(
+    taskContext,
+    callIndex,
+    request,
+    commitment.allowedModels[0]
+  );
+
+  // For pass / model_mismatch / usage_insufficient: use current EVM block time as
+  // observedAt so the receipt falls within [fundedAt, deadline].
+  // For timestamp_* scenarios: the adapter computes observedAt from timeWindow.
+  const needsExplicitObservedAt =
+    scenario === "pass" ||
+    scenario === "model_mismatch" ||
+    scenario === "usage_insufficient";
+
+  const observedAt: UIntLike | undefined = needsExplicitObservedAt
+    ? await currentTimeMs()
+    : undefined;
+
+  const provenFetchResult = await env.zkTlsAdapter.provenFetch({
+    taskContext,
+    callIndex,
+    callIntentHash,
+    request,
+    declaredModel: commitment.allowedModels[0],
+    scenario,
+    totalTokens: input.totalTokens,
+    commitmentMinTokens: input.commitmentMinTokens,
+    timeWindow: input.timeWindow,
+    observedAt
+  });
+
+  // Upload raw proof to storage (verifier needs to fetch it)
+  const rawProofPointer = await env.storage.putObject(provenFetchResult.rawProof, {
+    namespace: "raw-proofs"
+  });
+
+  // Normalize into a DeliveryReceipt
+  const receipt = await env.zkTlsAdapter.normalizeReceipt(provenFetchResult.rawProof, {
+    taskContext,
+    callIndex,
+    callIntentHash,
+    rawProofURI: rawProofPointer.uri
+  });
+
+  return { receipt, rawProof: provenFetchResult.rawProof };
+}
+
+export interface SellerProofOutput {
+  proofBundle: ProofBundle;
+  proofBundleHash: Bytes32;
+  proofBundleURI: URI;
+}
+
+/**
+ * Build and upload a proof bundle from one or more receipts.
+ * Does NOT submit the hash on-chain — call sellerSubmitProof for that.
+ */
+export async function sellerBuildAndUploadProof(input: {
+  env: E2eEnvironment;
+  commitment: ExecutionCommitment;
+  receipts: DeliveryReceipt[];
+}): Promise<SellerProofOutput> {
+  const { env, commitment, receipts } = input;
+
+  const proofBundle = env.sellerAgent.buildProofBundle({ commitment, receipts });
+  const uploadResult = await env.sellerAgent.uploadProofBundle(proofBundle);
 
   return {
     proofBundle,
@@ -216,7 +323,53 @@ export async function sellerFullFlow(input: {
 }
 
 /**
- * Sign a VerificationReport using the EIP-712 typed data for the settlement contract.
+ * Submit a proof bundle hash on-chain (FUNDED → PROOF_SUBMITTED).
+ */
+export async function sellerSubmitProof(input: {
+  env: E2eEnvironment;
+  commitment: ExecutionCommitment;
+  proofBundleHash: Bytes32;
+  proofBundleURI: URI;
+}): Promise<void> {
+  const { env, commitment, proofBundleHash, proofBundleURI } = input;
+  const contract = (await ethers.getContractAt(
+    "FulfillPaySettlement",
+    env.settlementAddress
+  )).connect(env.seller);
+
+  await env.sellerAgent.submitProofBundleHash(
+    contract,
+    commitment.taskId,
+    proofBundleHash,
+    proofBundleURI
+  );
+}
+
+/**
+ * Run the full Seller flow for a single-receipt proof bundle:
+ *   provenFetch → buildProofBundle → upload → submitProofBundleHash
+ */
+export async function sellerFullFlow(input: SellerFetchInput): Promise<SellerProofOutput> {
+  const fetchOutput = await sellerProvenFetch(input);
+
+  const proofOutput = await sellerBuildAndUploadProof({
+    env: input.env,
+    commitment: input.commitment,
+    receipts: [fetchOutput.receipt]
+  });
+
+  await sellerSubmitProof({
+    env: input.env,
+    commitment: input.commitment,
+    proofBundleHash: proofOutput.proofBundleHash,
+    proofBundleURI: proofOutput.proofBundleURI
+  });
+
+  return proofOutput;
+}
+
+/**
+ * Sign a VerificationReport using EIP-712 typed data for the settlement contract.
  */
 export async function signVerificationReport(input: {
   verifier: HardhatEthersSigner;
@@ -261,7 +414,90 @@ export async function signVerificationReport(input: {
 }
 
 /**
- * Helper to get current chain time in milliseconds.
+ * Build a correctly computed reportHash and return a signed settle report.
+ */
+export async function buildAndSignReport(input: {
+  env: E2eEnvironment;
+  taskId: string;
+  commitmentHash: string;
+  proofBundleHash: string;
+  passed: boolean;
+  totalTokens?: number;
+}): Promise<{
+  report: {
+    taskId: string;
+    buyer: string;
+    seller: string;
+    commitmentHash: string;
+    proofBundleHash: string;
+    passed: boolean;
+    settlementAction: number;
+    settlementAmount: bigint;
+    verifiedAt: bigint;
+    reportHash: string;
+  };
+  signature: string;
+}> {
+  const { env } = input;
+  const verifiedAt = BigInt(await env.settlement.currentTimeMs());
+  const settlementAction = input.passed ? 1 : 2;
+
+  const reportHash = hashVerificationReport({
+    schemaVersion: SCHEMA_VERSIONS.verificationReport,
+    chainId: env.chainId.toString(),
+    settlementContract: env.settlementAddress.toLowerCase(),
+    taskId: input.taskId as Bytes32,
+    buyer: env.buyer.address.toLowerCase() as Bytes32,
+    seller: env.seller.address.toLowerCase() as Bytes32,
+    commitmentHash: input.commitmentHash,
+    proofBundleHash: input.proofBundleHash,
+    passed: input.passed,
+    checks: {
+      commitmentHashMatched: true,
+      proofBundleHashMatched: true,
+      zkTlsProofValid: true,
+      endpointMatched: true,
+      taskContextMatched: true,
+      callIndicesUnique: true,
+      proofNotConsumed: true,
+      withinTaskWindow: true,
+      modelMatched: input.passed,
+      usageSatisfied: input.passed
+    },
+    aggregateUsage: { totalTokens: input.totalTokens ?? DEFAULT_TOKENS },
+    settlement: {
+      action: input.passed ? "RELEASE" as const : "REFUND" as const,
+      amount: DEFAULT_AMOUNT.toString()
+    },
+    verifier: env.verifier.address.toLowerCase() as Bytes32,
+    verifiedAt: verifiedAt.toString()
+  });
+
+  const report = {
+    taskId: input.taskId,
+    buyer: env.buyer.address,
+    seller: env.seller.address,
+    commitmentHash: input.commitmentHash,
+    proofBundleHash: input.proofBundleHash,
+    passed: input.passed,
+    settlementAction,
+    settlementAmount: DEFAULT_AMOUNT,
+    verifiedAt,
+    reportHash
+  };
+
+  const signature = await signVerificationReport({
+    verifier: env.verifier,
+    settlementAddress: env.settlementAddress,
+    chainId: env.chainId,
+    report
+  });
+
+  return { report, signature };
+}
+
+/**
+ * Get current chain time in milliseconds.
  */
 export async function currentTimeMs(): Promise<bigint> {
   const block = await ethers.provider.getBlock("latest");
@@ -278,7 +514,7 @@ export async function increaseTime(seconds: number): Promise<void> {
 }
 
 /**
- * Increase EVM time to a specific timestamp.
+ * Increase EVM time to a specific timestamp (seconds).
  */
 export async function increaseTimeTo(timestampSeconds: number): Promise<void> {
   await ethers.provider.send("evm_mine", [timestampSeconds]);

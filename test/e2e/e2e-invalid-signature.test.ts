@@ -18,7 +18,14 @@ import {
   type E2eEnvironment
 } from "./helpers/setup";
 
-describe("E2E-03: Invalid Signature Rejection", function () {
+/**
+ * E2E-12: Unregistered Verifier Signature Rejection
+ * E2E-05 (additional cases): EmptyReportHash guard, tampered report binding
+ *
+ * These tests verify the contract's signature and report integrity checks by
+ * manually crafting invalid reports and observing the expected reverts.
+ */
+describe("E2E-12/05: Invalid Report Signature & Integrity Rejection", function () {
   this.timeout(120_000);
 
   let env: E2eEnvironment;
@@ -27,10 +34,11 @@ describe("E2E-03: Invalid Signature Rejection", function () {
     env = await deployE2eFixture();
   });
 
-  it("rejects settlement with a signature from an unregistered verifier", async function () {
+  // ─── E2E-12: Unregistered Verifier ────────────────────────────────────────
+
+  it("E2E-12: rejects settlement with a signature from an unregistered verifier", async function () {
     const deadlineMs = (await currentTimeMs()) + 60n * 60n * 1000n;
 
-    // Create and fund task
     const created = await env.buyerSdk.createTaskIntent({
       seller: env.seller.address,
       token: await ethers.resolveAddress(env.mockToken),
@@ -46,12 +54,7 @@ describe("E2E-03: Invalid Signature Rejection", function () {
       verifier: env.verifier.address
     });
 
-    await submitCommitmentOnChain({
-      env,
-      taskId: created.taskId as Bytes32,
-      commitment
-    });
-
+    await submitCommitmentOnChain({ env, taskId: created.taskId as Bytes32, commitment });
     await env.buyerSdk.fundTask(created.taskId, {
       validateCommitment: {
         acceptedHosts: ["api.openai.com"],
@@ -60,15 +63,9 @@ describe("E2E-03: Invalid Signature Rejection", function () {
       }
     });
 
-    // Seller submits proof bundle
     const sellerResult = await sellerFullFlow({
-      env,
-      commitment,
-      taskNonce: created.taskNonce as Bytes32
+      env, commitment, taskNonce: created.taskNonce as Bytes32
     });
-
-    // Get a stranger signer (not registered as verifier)
-    const [, , , , stranger] = await ethers.getSigners();
 
     const task = await env.buyerSdk.getTask(created.taskId);
     const verifiedAt = BigInt(await env.settlement.currentTimeMs());
@@ -84,20 +81,13 @@ describe("E2E-03: Invalid Signature Rejection", function () {
       proofBundleHash: sellerResult.proofBundleHash,
       passed: true,
       checks: {
-        commitmentHashMatched: true,
-        proofBundleHashMatched: true,
-        zkTlsProofValid: true,
-        endpointMatched: true,
-        taskContextMatched: true,
-        callIndicesUnique: true,
-        proofNotConsumed: true,
-        withinTaskWindow: true,
-        modelMatched: true,
-        usageSatisfied: true
+        commitmentHashMatched: true, proofBundleHashMatched: true, zkTlsProofValid: true,
+        endpointMatched: true, taskContextMatched: true, callIndicesUnique: true,
+        proofNotConsumed: true, withinTaskWindow: true, modelMatched: true, usageSatisfied: true
       },
       aggregateUsage: { totalTokens: 128 },
       settlement: { action: "RELEASE", amount: DEFAULT_AMOUNT.toString() },
-      verifier: stranger.address.toLowerCase() as Bytes32,
+      verifier: env.stranger.address.toLowerCase() as Bytes32,
       verifiedAt: verifiedAt.toString()
     });
 
@@ -114,26 +104,19 @@ describe("E2E-03: Invalid Signature Rejection", function () {
       reportHash
     };
 
-    // Sign with stranger (unregistered verifier)
-    const fakeSignature = await stranger.signTypedData(
+    // Stranger (not registered in VerifierRegistry) signs
+    const fakeSignature = await env.stranger.signTypedData(
       {
-        name: "FulfillPay",
-        version: "1",
-        chainId: env.chainId,
-        verifyingContract: env.settlementAddress
+        name: "FulfillPay", version: "1",
+        chainId: env.chainId, verifyingContract: env.settlementAddress
       },
       {
         VerificationReport: [
-          { name: "taskId", type: "bytes32" },
-          { name: "buyer", type: "address" },
-          { name: "seller", type: "address" },
-          { name: "commitmentHash", type: "bytes32" },
-          { name: "proofBundleHash", type: "bytes32" },
-          { name: "passed", type: "bool" },
-          { name: "settlementAction", type: "uint8" },
-          { name: "settlementAmount", type: "uint256" },
-          { name: "verifiedAt", type: "uint256" },
-          { name: "reportHash", type: "bytes32" }
+          { name: "taskId", type: "bytes32" }, { name: "buyer", type: "address" },
+          { name: "seller", type: "address" }, { name: "commitmentHash", type: "bytes32" },
+          { name: "proofBundleHash", type: "bytes32" }, { name: "passed", type: "bool" },
+          { name: "settlementAction", type: "uint8" }, { name: "settlementAmount", type: "uint256" },
+          { name: "verifiedAt", type: "uint256" }, { name: "reportHash", type: "bytes32" }
         ]
       },
       report
@@ -144,7 +127,9 @@ describe("E2E-03: Invalid Signature Rejection", function () {
     ).to.be.revertedWithCustomError(env.settlement, "UnauthorizedVerifier");
   });
 
-  it("rejects settlement with empty report hash (ZeroHash)", async function () {
+  // ─── EmptyReportHash guard ────────────────────────────────────────────────
+
+  it("rejects settlement with empty reportHash (ZeroHash)", async function () {
     const deadlineMs = (await currentTimeMs()) + 60n * 60n * 1000n;
 
     const created = await env.buyerSdk.createTaskIntent({
@@ -162,12 +147,7 @@ describe("E2E-03: Invalid Signature Rejection", function () {
       verifier: env.verifier.address
     });
 
-    await submitCommitmentOnChain({
-      env,
-      taskId: created.taskId as Bytes32,
-      commitment
-    });
-
+    await submitCommitmentOnChain({ env, taskId: created.taskId as Bytes32, commitment });
     await env.buyerSdk.fundTask(created.taskId, {
       validateCommitment: {
         acceptedHosts: ["api.openai.com"],
@@ -177,9 +157,7 @@ describe("E2E-03: Invalid Signature Rejection", function () {
     });
 
     const sellerResult = await sellerFullFlow({
-      env,
-      commitment,
-      taskNonce: created.taskNonce as Bytes32
+      env, commitment, taskNonce: created.taskNonce as Bytes32
     });
 
     const task = await env.buyerSdk.getTask(created.taskId);
@@ -195,10 +173,9 @@ describe("E2E-03: Invalid Signature Rejection", function () {
       settlementAction: 1,
       settlementAmount: DEFAULT_AMOUNT,
       verifiedAt,
-      reportHash: ethers.ZeroHash // Empty hash!
+      reportHash: ethers.ZeroHash
     };
 
-    // Sign with legitimate verifier but empty reportHash
     const signature = await signVerificationReport({
       verifier: env.verifier,
       settlementAddress: env.settlementAddress,
@@ -211,7 +188,9 @@ describe("E2E-03: Invalid Signature Rejection", function () {
     ).to.be.revertedWithCustomError(env.settlement, "EmptyReportHash");
   });
 
-  it("rejects settlement with tampered report fields (wrong commitmentHash)", async function () {
+  // ─── Tampered commitmentHash ───────────────────────────────────────────────
+
+  it("rejects settlement with tampered commitmentHash (InvalidReportBinding)", async function () {
     const deadlineMs = (await currentTimeMs()) + 60n * 60n * 1000n;
 
     const created = await env.buyerSdk.createTaskIntent({
@@ -229,12 +208,7 @@ describe("E2E-03: Invalid Signature Rejection", function () {
       verifier: env.verifier.address
     });
 
-    await submitCommitmentOnChain({
-      env,
-      taskId: created.taskId as Bytes32,
-      commitment
-    });
-
+    await submitCommitmentOnChain({ env, taskId: created.taskId as Bytes32, commitment });
     await env.buyerSdk.fundTask(created.taskId, {
       validateCommitment: {
         acceptedHosts: ["api.openai.com"],
@@ -244,18 +218,11 @@ describe("E2E-03: Invalid Signature Rejection", function () {
     });
 
     const sellerResult = await sellerFullFlow({
-      env,
-      commitment,
-      taskNonce: created.taskNonce as Bytes32
+      env, commitment, taskNonce: created.taskNonce as Bytes32
     });
 
-    const task = await env.buyerSdk.getTask(created.taskId);
     const verifiedAt = BigInt(await env.settlement.currentTimeMs());
-
-    // Tamper with commitmentHash
-    const tamperedCommitmentHash = ethers.keccak256(
-      ethers.toUtf8Bytes("tampered")
-    );
+    const tamperedCommitmentHash = ethers.keccak256(ethers.toUtf8Bytes("tampered"));
 
     const reportHash = hashVerificationReport({
       schemaVersion: SCHEMA_VERSIONS.verificationReport,
@@ -268,16 +235,9 @@ describe("E2E-03: Invalid Signature Rejection", function () {
       proofBundleHash: sellerResult.proofBundleHash,
       passed: true,
       checks: {
-        commitmentHashMatched: true,
-        proofBundleHashMatched: true,
-        zkTlsProofValid: true,
-        endpointMatched: true,
-        taskContextMatched: true,
-        callIndicesUnique: true,
-        proofNotConsumed: true,
-        withinTaskWindow: true,
-        modelMatched: true,
-        usageSatisfied: true
+        commitmentHashMatched: true, proofBundleHashMatched: true, zkTlsProofValid: true,
+        endpointMatched: true, taskContextMatched: true, callIndicesUnique: true,
+        proofNotConsumed: true, withinTaskWindow: true, modelMatched: true, usageSatisfied: true
       },
       aggregateUsage: { totalTokens: 128 },
       settlement: { action: "RELEASE", amount: DEFAULT_AMOUNT.toString() },
@@ -289,7 +249,7 @@ describe("E2E-03: Invalid Signature Rejection", function () {
       taskId: created.taskId,
       buyer: env.buyer.address,
       seller: env.seller.address,
-      commitmentHash: tamperedCommitmentHash, // Wrong!
+      commitmentHash: tamperedCommitmentHash,
       proofBundleHash: sellerResult.proofBundleHash,
       passed: true,
       settlementAction: 1,
@@ -305,7 +265,6 @@ describe("E2E-03: Invalid Signature Rejection", function () {
       report
     });
 
-    // Should fail because commitmentHash doesn't match on-chain task
     await expect(
       env.settlement.settle(report, signature)
     ).to.be.revertedWithCustomError(env.settlement, "InvalidReportBinding");
