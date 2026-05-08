@@ -34,6 +34,17 @@ interface ReclaimProvenFetchInput {
   useTee?: boolean;
   extractionProfile?: ReclaimExtractionProfile;
 }
+
+interface ReclaimZkFetchAdapterConfig {
+  appId?: string;
+  appSecret?: string;
+  enableLogs?: boolean;
+  defaultUseTee?: boolean;
+  defaultRetries?: number;
+  defaultRetryIntervalMs?: number;
+  clientFactory?: ReclaimClientFactory;
+  verifyProof?: ReclaimProofVerifier;
+}
 ```
 
 ## Raw Proof Envelope
@@ -69,9 +80,12 @@ This keeps verifier input stable even if Reclaim changes native proof shape.
 2. Seller SDK forwards `providerOptions` into `ReclaimZkTlsAdapter.provenFetch`.
 3. Adapter maps `request` to Reclaim `publicOptions`.
 4. Adapter maps `privateOptions`, `retries`, `retryIntervalMs`, and `useTee` to `zkFetch`.
-5. Adapter extracts OpenAI-compatible `model` and `usage.total_tokens`.
-6. Adapter stores Reclaim native proof inside `ReclaimRawProof`.
-7. Adapter normalizes the envelope into a standard `DeliveryReceipt`.
+5. Adapter passes `enableLogs` to the `ReclaimClient` constructor as the official `logs` flag.
+6. Adapter initializes `@reclaimprotocol/tls` per official README before calling `zkFetch`.
+7. Adapter dynamically imports Reclaim TLS helpers and normalizes old/new TLS helper names where the published packages disagree.
+8. Adapter extracts OpenAI-compatible `model` and `usage.total_tokens`.
+9. Adapter stores Reclaim native proof inside `ReclaimRawProof`.
+10. Adapter normalizes the envelope into a standard `DeliveryReceipt`.
 
 ## Verification
 
@@ -97,9 +111,16 @@ The adapter loads Reclaim SDKs dynamically:
 
 This keeps the package compilable even when Reclaim dependencies are not installed. Production deployments must install those packages and provide `appId` and `appSecret`, or inject a custom `clientFactory` and `verifyProof`.
 
+Production deployments must also download Reclaim zk resource files with the official downloader:
+
+```bash
+node node_modules/@reclaimprotocol/zk-fetch/scripts/download-files.js
+```
+
 ## Current Limits
 
 1. Only OpenAI-compatible response extraction is supported.
 2. `model` and `usage.total_tokens` must remain recoverable after redaction.
 3. Proof binding is proof-level context binding, not request-level nonce injection.
 4. Reclaim native proof field assumptions should be validated against the installed SDK version before production use.
+5. `@reclaimprotocol/zk-fetch` TEE mode is not supported on Windows hosts; Windows integrations must run with `useTee=false`.

@@ -37,7 +37,8 @@ const agent = new SellerAgent({
   storageAdapter: new MemoryStorageAdapter(),
   zkTlsAdapter: new ReclaimZkTlsAdapter({
     appId: process.env.RECLAIM_APP_ID,
-    appSecret: process.env.RECLAIM_APP_SECRET
+    appSecret: process.env.RECLAIM_APP_SECRET,
+    enableLogs: true
   })
 });
 ```
@@ -84,8 +85,7 @@ const result = await agent.provenFetch({
       }
     },
     retries: 2,
-    retryIntervalMs: 500,
-    useTee: true
+    retryIntervalMs: 500
   }
 });
 ```
@@ -126,7 +126,7 @@ Supported fields today:
 - `privateOptions.responseRedactions`: response redaction rules
 - `retries`: retry count for `zkFetch`
 - `retryIntervalMs`: retry interval in milliseconds
-- `useTee`: whether to enable TEE mode
+- `useTee`: whether to enable TEE mode for this specific `zkFetch` call
 - `extractionProfile`: extraction mode, currently only `openai-compatible`
 
 Example:
@@ -140,11 +140,33 @@ providerOptions: {
   },
   retries: 2,
   retryIntervalMs: 500,
-  useTee: true,
   extractionProfile: {
     mode: "openai-compatible"
   }
 }
+```
+
+Adapter config fields:
+
+- `appId`: Reclaim application id
+- `appSecret`: Reclaim application secret
+- `enableLogs`: whether to pass `logs=true` into `ReclaimClient`
+- `defaultUseTee`: default TEE mode if a call does not pass `providerOptions.useTee`
+- `defaultRetries`: default retry count if a call does not pass `providerOptions.retries`
+- `defaultRetryIntervalMs`: default retry interval if a call does not pass `providerOptions.retryIntervalMs`
+
+TEE note:
+
+- `useTee` is a per-request `zkFetch` option. It is not a constructor argument.
+- `@reclaimprotocol/zk-fetch` TEE mode is not supported on Windows. On Windows hosts, keep `useTee` unset or `false`.
+
+Runtime requirements:
+
+- Install `@reclaimprotocol/zk-fetch` and `@reclaimprotocol/js-sdk`.
+- Download the Reclaim zk resources before production use:
+
+```bash
+node node_modules/@reclaimprotocol/zk-fetch/scripts/download-files.js
 ```
 
 ## Build the Final Proof Bundle
@@ -208,8 +230,7 @@ const result0 = await agent.provenFetch({
       }
     },
     retries: 2,
-    retryIntervalMs: 500,
-    useTee: true
+    retryIntervalMs: 500
   }
 });
 
@@ -252,4 +273,6 @@ If these constraints are violated, `SellerAgent.provenFetch()` should reject bef
 
 - `ReclaimZkTlsAdapter` currently supports only `openai-compatible` extraction
 - production Reclaim integration still requires deploy-time installation of Reclaim SDK dependencies
+- production Reclaim integration also requires zk resource files downloaded by the official `zk-fetch` downloader
+- Windows hosts cannot use Reclaim TEE mode through `@reclaimprotocol/zk-fetch`
 - `MemoryStorageAdapter` is for local testing only; production should use persistent storage
