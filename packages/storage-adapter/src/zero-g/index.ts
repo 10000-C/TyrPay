@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { Indexer, MemData } from "@0glabs/0g-ts-sdk";
+import { Indexer, MemData } from "@0gfoundation/0g-storage-ts-sdk";
 import type { Bytes32, URI } from "@fulfillpay/sdk-core";
 
 import type { GetObjectOptions, PutObjectOptions, StorageAdapter, StoragePointer } from "../types.js";
@@ -56,7 +56,13 @@ export interface ZeroGStorageSdkIndexer {
     uploadOptions?: ZeroGStorageUploadOptions,
     retryOptions?: ZeroGStorageRetryOptions,
     transactionOptions?: ZeroGStorageTransactionOptions
-  ): Promise<[{ txHash: string; rootHash: string } | null, Error | null]>;
+  ): Promise<
+    [
+      | { txHash: string; rootHash: string; txSeq: number }
+      | { txHashes: string[]; rootHashes: string[]; txSeqs: number[] },
+      Error | null
+    ]
+  >;
   download(rootHash: string, filePath: string, withProof: boolean): Promise<Error | null>;
 }
 
@@ -145,7 +151,8 @@ export function createZeroGStorageTransport(options: ZeroGStorageSdkTransportOpt
       if (error) {
         throw error;
       }
-      if (!result) {
+      const uploadResult = toSingleUploadResult(result);
+      if (!uploadResult) {
         throw new StorageConfigurationError("0G upload did not return a result.");
       }
 
@@ -153,8 +160,8 @@ export function createZeroGStorageTransport(options: ZeroGStorageSdkTransportOpt
         uri: buildZeroGStorageUri({
           namespace: request.namespace,
           hash: request.hash,
-          rootHash: result.rootHash,
-          txHash: result.txHash
+          rootHash: uploadResult.rootHash,
+          txHash: uploadResult.txHash
         })
       };
     },
@@ -243,4 +250,21 @@ function assertZeroGRootHash(rootHash: string): void {
   if (!ROOT_HASH_PATTERN.test(rootHash)) {
     throw new StorageConfigurationError("0G storage rootHash must be a 0x-prefixed 32-byte hex string.");
   }
+}
+
+function toSingleUploadResult(
+  result:
+    | { txHash: string; rootHash: string; txSeq: number }
+    | { txHashes: string[]; rootHashes: string[]; txSeqs: number[] }
+    | null
+    | undefined
+): { txHash: string; rootHash: string; txSeq: number } | null {
+  if (!result) {
+    return null;
+  }
+  if ("rootHashes" in result || "txHashes" in result || "txSeqs" in result) {
+    throw new StorageConfigurationError("ZeroGStorageAdapter only supports single-object uploads.");
+  }
+
+  return result;
 }

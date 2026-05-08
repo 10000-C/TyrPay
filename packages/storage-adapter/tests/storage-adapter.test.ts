@@ -164,7 +164,7 @@ test("zero-g SDK transport uploads canonical payloads and downloads by root hash
       assert.equal(evmRpc, "https://evmrpc-testnet.0g.ai");
       downloadedPayloads.set(rootHash, Buffer.from(Array.from(file.data)).toString("utf8"));
 
-      return [{ txHash, rootHash }, null];
+      return [{ txHash, rootHash, txSeq: 1 }, null];
     },
     async download(requestedRootHash, filePath, withProof) {
       assert.equal(requestedRootHash, rootHash);
@@ -202,6 +202,34 @@ test("zero-g adapter fails fast when no transport is configured", async () => {
   const adapter = new ZeroGStorageAdapter();
 
   await assert.rejects(() => adapter.putObject(fixture.object), StorageConfigurationError);
+});
+
+test("zero-g SDK transport rejects multi-file upload results", async () => {
+  const fixture = loadFixture<ProofBundle>("test/fixtures/protocol/proof-bundles/proof-bundle.pass-basic.json");
+  const indexer: ZeroGStorageSdkIndexer = {
+    async upload() {
+      return [
+        {
+          txHashes: [`0x${"3".repeat(64)}`],
+          rootHashes: [`0x${"2".repeat(64)}`],
+          txSeqs: [1]
+        },
+        null
+      ];
+    },
+    async download() {
+      return null;
+    }
+  };
+  const adapter = new ZeroGStorageAdapter({
+    transport: createZeroGStorageTransport({
+      indexer,
+      evmRpc: "https://evmrpc-testnet.0g.ai",
+      signer: {} as ZeroGStorageSigner
+    })
+  });
+
+  await assert.rejects(() => adapter.putObject(fixture.object, { namespace: "proof-bundles" }), StorageConfigurationError);
 });
 
 test("zero-g adapter normalizes transport-level missing payloads into StorageNotFoundError", async () => {

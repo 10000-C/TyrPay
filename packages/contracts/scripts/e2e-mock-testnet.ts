@@ -15,11 +15,11 @@ import {
   type Address,
   type Bytes32,
   type ExecutionCommitment,
+  type ProofBundle,
   type VerificationReport
 } from "@fulfillpay/sdk-core";
 import { BuyerSdk } from "@fulfillpay/buyer-sdk";
 import { SellerAgent } from "@fulfillpay/seller-sdk";
-import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
 import {
   CentralizedVerifier,
   EthersSettlementTaskReader,
@@ -34,6 +34,11 @@ import {
   MockERC20__factory,
   VerifierRegistry__factory
 } from "../typechain-types";
+import {
+  ZeroGStorageAdapter,
+  createZeroGStorageTransport,
+  type StorageAdapter
+} from "@fulfillpay/storage-adapter";
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 dotenv.config();
@@ -73,7 +78,14 @@ async function main() {
   const mockToken = await deployAndAllowMockToken(settlementAsOwner, ownerWallet);
   await fundBuyerAndApprove(mockToken, buyerWallet, settlementAddress);
 
-  const storage = new MemoryStorageAdapter();
+  const storage = new ZeroGStorageAdapter({
+    transport: createZeroGStorageTransport({
+      indexer: requireEnv("ZERO_G_INDEXER_RPC"),
+      evmRpc: rpcUrl,
+      signer: sellerWallet,
+      withProof: true
+    })
+  });
   const zkTlsAdapter = new MockZkTlsAdapter();
   const buyerSdk = new BuyerSdk({
     settlementAddress,
@@ -114,13 +126,24 @@ async function main() {
   try {
     const currentTimeMs = await settlement.currentTimeMs();
     const deadlineMs = currentTimeMs + 60n * 60n * 1000n;
+    const taskMetadata = {
+      kind: "live-e2e-task-metadata",
+      chainId: network.chainId.toString(),
+      settlement: settlementAddress,
+      seller: sellerWallet.address,
+      verifier: verifierWallet.address,
+      createdAt: currentTimeMs.toString(),
+      note: "mockZK live loop with real 0G storage"
+    };
+    const metadataPointer = await storage.putObject(taskMetadata, { namespace: "task-metadata" });
 
     const created = await buyerSdk.createTaskIntent({
       seller: sellerWallet.address,
       token: await mockToken.getAddress(),
       amount: DEFAULT_AMOUNT,
       deadline: deadlineMs,
-      metadataURI: "memory://live-e2e/mock-task"
+      metadataHash: metadataPointer.hash,
+      metadataURI: metadataPointer.uri
     });
     await expectTaskStatus(buyerSdk, created.taskId, "INTENT_CREATED");
 
@@ -195,12 +218,35 @@ async function main() {
     assert.equal(sellerBalance, DEFAULT_AMOUNT);
     assert.equal(escrowBalance, 0n);
 
+    const restoredMetadata = await storage.getObject<typeof taskMetadata>(metadataPointer, {
+      expectedHash: metadataPointer.hash
+    });
+    const restoredCommitment = await storage.getObject<ExecutionCommitment>(commitmentPointer, {
+      expectedHash: commitmentPointer.hash
+    });
+    const restoredRawProof = await storage.getObject<typeof proofOutput.rawProof>(proofOutput.rawProofPointer, {
+      expectedHash: proofOutput.rawProofPointer.hash
+    });
+    const restoredProofBundle = await storage.getObject<ProofBundle>(proofOutput.proofBundlePointer, {
+      expectedHash: proofOutput.proofBundlePointer.hash
+    });
+
+    assert.deepEqual(restoredMetadata, taskMetadata);
+    assert.deepEqual(restoredCommitment, commitment);
+    assert.deepEqual(restoredRawProof, proofOutput.rawProof);
+    assert.equal(restoredProofBundle.taskId, created.taskId);
+    assert.equal(restoredProofBundle.commitmentHash, commitmentPointer.hash);
+
     console.log(`E2E mock loop passed on chain ${network.chainId.toString()}.`);
     console.log(`Settlement: ${settlementAddress}`);
     console.log(`VerifierRegistry: ${verifierRegistryAddress}`);
     console.log(`MockToken: ${await mockToken.getAddress()}`);
     console.log(`TaskId: ${created.taskId}`);
     console.log(`ProofBundleHash: ${proofOutput.proofBundleHash}`);
+    console.log(`MetadataURI: ${metadataPointer.uri}`);
+    console.log(`CommitmentURI: ${commitmentPointer.uri}`);
+    console.log(`RawProofURI: ${proofOutput.rawProofPointer.uri}`);
+    console.log(`ProofBundleURI: ${proofOutput.proofBundleUri}`);
   } finally {
     await closeServer(verifierServer);
   }
@@ -299,7 +345,7 @@ function buildCommitment(input: {
 
 async function buildAndSubmitMockProof(input: {
   sellerAgent: SellerAgent;
-  storage: MemoryStorageAdapter;
+  storage: StorageAdapter;
   zkTlsAdapter: MockZkTlsAdapter;
   commitment: ExecutionCommitment;
   taskNonce: Bytes32;
@@ -349,6 +395,9 @@ async function buildAndSubmitMockProof(input: {
   assert.equal(hashExecutionCommitment(input.commitment), proofBundle.commitmentHash);
 
   return {
+    rawProof: provenFetch.rawProof,
+    rawProofPointer,
+    proofBundlePointer,
     proofBundleHash: proofBundlePointer.hash as Bytes32,
     proofBundleUri: proofBundlePointer.uri
   };
