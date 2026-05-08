@@ -4,7 +4,7 @@ import path from "node:path";
 import { readFileSync } from "node:fs";
 
 import type { ExecutionCommitment, ProofBundle, DeliveryReceipt, Bytes32 } from "@fulfillpay/sdk-core";
-import { hashExecutionCommitment, hashProofBundle } from "@fulfillpay/sdk-core";
+import { hashDeliveryReceipt, hashExecutionCommitment, hashProofBundle } from "@fulfillpay/sdk-core";
 import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
 import { MockZkTlsAdapter } from "@fulfillpay/zktls-adapter";
 
@@ -209,7 +209,13 @@ test("provenFetch produces a valid DeliveryReceipt", async () => {
   assert.ok(receipt.requestHash.startsWith("0x"));
   assert.ok(receipt.responseHash.startsWith("0x"));
   assert.ok(receipt.providerProofId.length > 0);
+  assert.equal(result.receiptPointer.hash, hashDeliveryReceipt(receipt));
+  assert.equal(result.receiptPointer.uri, `memory://storage/receipts/${result.receiptPointer.hash}.json`);
+  assert.equal(result.rawProofPointer.uri, receipt.rawProofURI);
   assert.ok(result.rawProof);
+
+  const restoredReceipt = await agent.storageAdapter.getObject<DeliveryReceipt>(result.receiptPointer);
+  assert.deepEqual(restoredReceipt, receipt);
 });
 
 // ── buildDeliveryReceipt tests ───────────────────────────────────

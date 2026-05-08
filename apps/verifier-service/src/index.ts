@@ -33,7 +33,7 @@ import {
   type UnsignedVerificationReport,
   type VerificationReport
 } from "@fulfillpay/sdk-core";
-import { StorageIntegrityError, type StorageAdapter } from "@fulfillpay/storage-adapter";
+import { StorageIntegrityError, type StorageAdapter, type StoragePointer } from "@fulfillpay/storage-adapter";
 import {
   hashRequestEvidence,
   hashResponseEvidence,
@@ -214,6 +214,7 @@ export interface VerificationEvaluation {
 
 export interface VerificationResult {
   report: VerificationReport;
+  reportPointer: StoragePointer;
   checks: RequiredVerificationChecks;
   aggregateUsage: AggregateUsage;
   consumed: boolean;
@@ -498,6 +499,7 @@ export class CentralizedVerifier {
 
     const unsignedReport = this.buildUnsignedReport(inputs, evaluation, verifier, verifiedAt);
     const report = await signVerificationReport(unsignedReport, this.options.signer);
+    const reportPointer = await this.options.storage.putObject(report, { namespace: "verification-reports" });
 
     let consumed = false;
     if ((options.markProofsConsumed ?? true) && evaluation.checks.proofNotConsumed && evaluation.proofsEligibleForConsumption) {
@@ -514,6 +516,7 @@ export class CentralizedVerifier {
 
     return {
       report,
+      reportPointer,
       checks: evaluation.checks,
       aggregateUsage: evaluation.aggregateUsage,
       consumed

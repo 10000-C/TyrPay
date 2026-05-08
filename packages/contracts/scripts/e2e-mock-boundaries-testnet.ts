@@ -15,6 +15,7 @@ import {
   type Bytes32,
   type DeliveryReceipt,
   type ExecutionCommitment,
+  type URI,
   type VerificationReport
 } from "@fulfillpay/sdk-core";
 import { BuyerSdk } from "@fulfillpay/buyer-sdk";
@@ -751,6 +752,7 @@ async function buildUploadedProof(
     callIntentHash,
     rawProofURI: rawProofPointer.uri
   });
+  await env.storage.putObject(receipt, { namespace: "receipts" });
 
   return buildProofBundleFromReceipts(env, options.commitment, [receipt]);
 }
@@ -774,6 +776,7 @@ async function buildProofBundleFromReceipts(
 
 async function verifyAndSettle(env: LiveBoundaryEnvironment, taskId: string) {
   const verificationResult = await callVerifier(env.verifierBaseUrl, taskId);
+  assert.equal(verificationResult.reportPointer.hash, hashObject(verificationResult.report));
   await (
     await env.settlement
       .connect(env.buyerWallet)
@@ -888,18 +891,23 @@ async function callVerifier(baseUrl: string, taskId: string) {
 
   const payload = await response.json() as {
     report?: VerificationReport;
+    reportPointer?: {
+      uri: string;
+      hash: string;
+    };
     checks?: Record<string, boolean>;
     aggregateUsage?: { totalTokens: number };
     error?: string;
     message?: string;
   };
 
-  if (!response.ok || !payload.report || !payload.checks || !payload.aggregateUsage) {
+  if (!response.ok || !payload.report || !payload.reportPointer || !payload.checks || !payload.aggregateUsage) {
     throw new Error(`Verifier request failed (${response.status}): ${JSON.stringify(payload)}`);
   }
 
   return payload as {
     report: VerificationReport;
+    reportPointer: { uri: URI; hash: Bytes32 };
     checks: Record<string, boolean>;
     aggregateUsage: { totalTokens: number };
   };

@@ -16,6 +16,7 @@ import {
   type Bytes32,
   type ExecutionCommitment,
   type ProofBundle,
+  type URI,
   type VerificationReport
 } from "@fulfillpay/sdk-core";
 import { BuyerSdk } from "@fulfillpay/buyer-sdk";
@@ -199,6 +200,7 @@ async function main() {
 
     const verificationResult = await callVerifier(verifierBaseUrl, created.taskId);
     assert.equal(verificationResult.report.passed, true);
+    assert.equal(verificationResult.reportPointer.hash, hashObject(verificationResult.report));
     assert.equal(verificationResult.report.settlement.action, "RELEASE");
     assert.equal(verificationResult.checks.callIndicesUnique, true);
     assert.equal(verificationResult.checks.withinTaskWindow, true);
@@ -227,15 +229,23 @@ async function main() {
     const restoredRawProof = await storage.getObject<typeof proofOutput.rawProof>(proofOutput.rawProofPointer, {
       expectedHash: proofOutput.rawProofPointer.hash
     });
+    const restoredReceipt = await storage.getObject<typeof proofOutput.receipt>(proofOutput.receiptPointer, {
+      expectedHash: proofOutput.receiptPointer.hash
+    });
     const restoredProofBundle = await storage.getObject<ProofBundle>(proofOutput.proofBundlePointer, {
       expectedHash: proofOutput.proofBundlePointer.hash
+    });
+    const restoredReport = await storage.getObject<VerificationReport>(verificationResult.reportPointer, {
+      expectedHash: verificationResult.reportPointer.hash
     });
 
     assert.deepEqual(restoredMetadata, taskMetadata);
     assert.deepEqual(restoredCommitment, commitment);
     assert.deepEqual(restoredRawProof, proofOutput.rawProof);
+    assert.deepEqual(restoredReceipt, proofOutput.receipt);
     assert.equal(restoredProofBundle.taskId, created.taskId);
     assert.equal(restoredProofBundle.commitmentHash, commitmentPointer.hash);
+    assert.deepEqual(restoredReport, verificationResult.report);
 
     console.log(`E2E mock loop passed on chain ${network.chainId.toString()}.`);
     console.log(`Settlement: ${settlementAddress}`);
@@ -246,7 +256,9 @@ async function main() {
     console.log(`MetadataURI: ${metadataPointer.uri}`);
     console.log(`CommitmentURI: ${commitmentPointer.uri}`);
     console.log(`RawProofURI: ${proofOutput.rawProofPointer.uri}`);
+    console.log(`ReceiptURI: ${proofOutput.receiptPointer.uri}`);
     console.log(`ProofBundleURI: ${proofOutput.proofBundleUri}`);
+    console.log(`ReportURI: ${verificationResult.reportPointer.uri}`);
   } finally {
     await closeServer(verifierServer);
   }
@@ -386,6 +398,7 @@ async function buildAndSubmitMockProof(input: {
     callIntentHash,
     rawProofURI: rawProofPointer.uri
   });
+  const receiptPointer = await input.storage.putObject(receipt, { namespace: "receipts" });
   const proofBundle = input.sellerAgent.buildProofBundle({
     commitment: input.commitment,
     receipts: [receipt]
@@ -397,6 +410,8 @@ async function buildAndSubmitMockProof(input: {
   return {
     rawProof: provenFetch.rawProof,
     rawProofPointer,
+    receipt,
+    receiptPointer,
     proofBundlePointer,
     proofBundleHash: proofBundlePointer.hash as Bytes32,
     proofBundleUri: proofBundlePointer.uri
@@ -421,18 +436,23 @@ async function callVerifier(baseUrl: string, taskId: string) {
       settlement: { action: string };
       signature: string;
     };
+    reportPointer?: {
+      uri: string;
+      hash: string;
+    };
     checks?: Record<string, boolean>;
     aggregateUsage?: { totalTokens: number };
     error?: string;
     message?: string;
   };
 
-  if (!response.ok || !payload.report || !payload.checks || !payload.aggregateUsage) {
+  if (!response.ok || !payload.report || !payload.reportPointer || !payload.checks || !payload.aggregateUsage) {
     throw new Error(`Verifier request failed (${response.status}): ${JSON.stringify(payload)}`);
   }
 
   return payload as {
     report: VerificationReport;
+    reportPointer: { uri: URI; hash: Bytes32 };
     checks: Record<string, boolean>;
     aggregateUsage: { totalTokens: number };
   };

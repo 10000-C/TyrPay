@@ -231,6 +231,7 @@ export class CentralizedVerifier {
         }
         const unsignedReport = this.buildUnsignedReport(inputs, evaluation, verifier, verifiedAt);
         const report = await signVerificationReport(unsignedReport, this.options.signer);
+        const reportPointer = await this.options.storage.putObject(report, { namespace: "verification-reports" });
         let consumed = false;
         if ((options.markProofsConsumed ?? true) && evaluation.checks.proofNotConsumed && evaluation.proofsEligibleForConsumption) {
             const reportHash = report.reportHash ?? hashVerificationReport(report);
@@ -245,6 +246,7 @@ export class CentralizedVerifier {
         }
         return {
             report,
+            reportPointer,
             checks: evaluation.checks,
             aggregateUsage: evaluation.aggregateUsage,
             consumed

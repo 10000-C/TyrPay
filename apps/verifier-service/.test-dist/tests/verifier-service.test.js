@@ -90,6 +90,9 @@ test("signs a passing verification report for contract settlement", async () => 
     assert.equal(settlementReport.settlementAction, 1);
     assert.equal(settlementReport.settlementAmount, BigInt(fixture.task.amount));
     assert.equal(settlementReport.reportHash, result.report.reportHash);
+    assert.equal(result.reportPointer.hash, hashObject(result.report));
+    const restoredReport = await fixture.storage.getObject(result.reportPointer);
+    assert.deepEqual(restoredReport, result.report);
 });
 test("rejects signing reports whose passed flag does not match required checks", async () => {
     const fixture = await buildFixture();
@@ -256,6 +259,7 @@ test("serves verification reports over the HTTP API", async () => {
         const body = (await response.json());
         assert.equal(response.status, 200);
         assert.equal(body.report.passed, true);
+        assert.match(body.reportPointer.uri, /^memory:\/\/storage\/verification-reports\//);
         assert.equal(body.consumed, false);
     }
     finally {

@@ -1,4 +1,4 @@
-import type { AggregateUsage, VerificationReport } from "@fulfillpay/sdk-core";
+import type { AggregateUsage, Bytes32, URI, VerificationReport } from "@fulfillpay/sdk-core";
 
 export interface VerifierClientOptions {
   baseUrl: string;
@@ -12,6 +12,10 @@ export interface VerifyTaskRequest {
 
 export interface VerifyTaskResponse {
   report: VerificationReport;
+  reportPointer: {
+    uri: URI;
+    hash: Bytes32;
+  };
   checks: Record<string, boolean>;
   aggregateUsage: AggregateUsage;
   consumed: boolean;
