@@ -56,7 +56,7 @@ export class ReclaimZkTlsAdapter
     const client = await createReclaimClient({
       appId: this.config.appId,
       appSecret: this.config.appSecret,
-      useTee,
+      logs: this.config.enableLogs,
       clientFactory: this.config.clientFactory
     });
     const proofContext = buildProviderProofContext(input);

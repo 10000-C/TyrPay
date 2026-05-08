@@ -18,6 +18,7 @@ export interface ReclaimZkFetchAdapterConfig {
   appId?: string;
   appSecret?: string;
   defaultUseTee?: boolean;
+  enableLogs?: boolean;
   defaultRetries?: number;
   defaultRetryIntervalMs?: number;
   clientFactory?: ReclaimClientFactory;
@@ -29,7 +30,7 @@ export type ReclaimClientFactory = (input: ReclaimClientFactoryInput) => Promise
 export interface ReclaimClientFactoryInput {
   appId: string;
   appSecret: string;
-  useTee: boolean;
+  logs?: boolean;
 }
 
 export interface ReclaimClientLike {
@@ -49,6 +50,7 @@ export interface ReclaimPublicOptions {
   headers?: Record<string, string>;
   body?: unknown;
   context: string;
+  useTee?: boolean;
 }
 
 export interface ReclaimPrivateOptions {
