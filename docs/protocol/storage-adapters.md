@@ -51,8 +51,8 @@ They MUST NOT verify fulfillment against the 0G root hash alone.
 ## 0G SDK Integration
 
 The `@fulfillpay/storage-adapter` package uses the official
-`@0glabs/0g-ts-sdk` package for the SDK-backed 0G transport. The official SDK
-flow is:
+`@0gfoundation/0g-storage-ts-sdk` package for the SDK-backed 0G transport. The
+official SDK flow is:
 
 1. Build an `Indexer` from the 0G Storage indexer RPC URL.
 2. Upload canonical JSON as `MemData` through `indexer.upload(...)`.
@@ -66,7 +66,7 @@ Official references:
 |---|---|
 | 0G Storage SDK docs | https://docs.0g.ai/developer-hub/building-on-0g/storage/sdk |
 | 0G Testnet docs | https://docs.0g.ai/developer-hub/testnet/testnet-overview |
-| 0G TS SDK package | https://www.npmjs.com/package/@0glabs/0g-ts-sdk |
+| 0G Storage TS SDK package | https://www.npmjs.com/package/@0gfoundation/0g-storage-ts-sdk |
 
 ## Configuration
 
@@ -77,7 +77,7 @@ construct storage adapters internally.
 Example:
 
 ```ts
-import { Indexer } from "@0glabs/0g-ts-sdk";
+import { Indexer } from "@0gfoundation/0g-storage-ts-sdk";
 import { ZeroGStorageAdapter, createZeroGStorageTransport } from "@fulfillpay/storage-adapter";
 import { JsonRpcProvider, Wallet } from "ethers";
 
