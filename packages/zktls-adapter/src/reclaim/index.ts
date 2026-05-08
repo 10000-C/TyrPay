@@ -25,7 +25,7 @@ import {
   buildReclaimUrl,
   createReclaimClient
 } from "./client.js";
-import { extractReclaimProofEvidence } from "./extraction.js";
+import { assertReclaimProofContextBound, extractReclaimProofEvidence } from "./extraction.js";
 import {
   RECLAIM_RAW_PROOF_SCHEMA_VERSION,
   RECLAIM_ZKTLS_PROVIDER,
@@ -59,14 +59,15 @@ export class ReclaimZkTlsAdapter
       useTee,
       clientFactory: this.config.clientFactory
     });
+    const proofContext = buildProviderProofContext(input);
     const reclaimProof = await client.zkFetch(
       url,
-      buildReclaimPublicOptions(input),
+      buildReclaimPublicOptions(input, proofContext),
       buildReclaimPrivateOptions(input),
       retries,
       retryIntervalMs
     );
-    const proofContext = buildProviderProofContext(input);
+    assertReclaimProofContextBound(reclaimProof, proofContext);
     const evidence = extractReclaimProofEvidence(reclaimProof, input.extractionProfile);
     const response = normalizeResponseEvidence(evidence.response);
     const payload: ReclaimRawProofPayload = {
@@ -107,7 +108,13 @@ export class ReclaimZkTlsAdapter
       }
 
       const verifyProof = this.config.verifyProof ?? defaultVerifyReclaimProof;
-      return Boolean(await verifyProof(rawProof.reclaimProof));
+      if (!(await verifyProof(rawProof.reclaimProof))) {
+        return false;
+      }
+
+      assertReclaimProofContextBound(rawProof.reclaimProof, rawProof.proofContext);
+      const verifiedEvidence = extractReclaimProofEvidence(rawProof.reclaimProof);
+      return reclaimEnvelopeMatchesNativeProof(rawProof, verifiedEvidence);
     } catch {
       return false;
     }
@@ -151,6 +158,23 @@ export class ReclaimZkTlsAdapter
     } catch {
       return null;
     }
+  }
+}
+
+function reclaimEnvelopeMatchesNativeProof(
+  rawProof: ReclaimRawProof,
+  evidence: ReturnType<typeof extractReclaimProofEvidence>
+): boolean {
+  try {
+    return (
+      rawProof.providerProofId === evidence.providerProofId &&
+      rawProof.observedAt === evidence.observedAt &&
+      hashResponseEvidence(rawProof.response) === hashResponseEvidence(evidence.response) &&
+      rawProof.extracted.model === evidence.extracted.model &&
+      rawProof.extracted.usage.totalTokens === evidence.extracted.usage.totalTokens
+    );
+  } catch {
+    return false;
   }
 }
 

@@ -1,13 +1,17 @@
-import { normalizeRequestEvidence } from "../core/index.js";
+import { hashObject, type Bytes32 } from "@fulfillpay/sdk-core";
+
+import { normalizeRequestEvidence, type ProviderProofContext } from "../core/index.js";
 
 import type {
   ReclaimClientFactory,
   ReclaimClientFactoryInput,
   ReclaimClientLike,
+  ReclaimProofContextBinding,
   ReclaimPrivateOptions,
   ReclaimPublicOptions,
   ReclaimProvenFetchInput
 } from "./types.js";
+import { RECLAIM_ZKTLS_PROVIDER } from "./types.js";
 
 type ReclaimZkFetchModule = {
   ReclaimClient?: new (appId: string, appSecret: string, useTee?: boolean) => ReclaimClientLike;
@@ -57,16 +61,34 @@ export function buildReclaimUrl(input: ReclaimProvenFetchInput): string {
   return `https://${request.host}${request.path}`;
 }
 
-export function buildReclaimPublicOptions(input: ReclaimProvenFetchInput): ReclaimPublicOptions {
+export function buildReclaimPublicOptions(
+  input: ReclaimProvenFetchInput,
+  proofContext: ProviderProofContext
+): ReclaimPublicOptions {
   const request = normalizeRequestEvidence(input.request);
 
   return {
     method: request.method,
     ...(request.headers ? { headers: request.headers } : {}),
-    ...(request.body !== undefined ? { body: request.body } : {})
+    ...(request.body !== undefined ? { body: request.body } : {}),
+    context: JSON.stringify(buildReclaimProofContextBinding(proofContext))
   };
 }
 
 export function buildReclaimPrivateOptions(input: ReclaimProvenFetchInput): ReclaimPrivateOptions | undefined {
   return input.privateOptions;
+}
+
+export function hashReclaimProofContext(proofContext: ProviderProofContext): Bytes32 {
+  return hashObject(proofContext);
+}
+
+export function buildReclaimProofContextBinding(proofContext: ProviderProofContext): ReclaimProofContextBinding {
+  return {
+    protocol: "FulfillPay",
+    version: 1,
+    provider: RECLAIM_ZKTLS_PROVIDER,
+    proofContextHash: hashReclaimProofContext(proofContext),
+    proofContext
+  };
 }

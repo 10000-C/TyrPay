@@ -4,8 +4,9 @@ import {
   type UnixMillis
 } from "@fulfillpay/sdk-core";
 
-import type { ZkTlsResponseEvidence } from "../core/index.js";
-import type { ReclaimExtractionProfile } from "./types.js";
+import type { ProviderProofContext, ZkTlsResponseEvidence } from "../core/index.js";
+import { buildReclaimProofContextBinding } from "./client.js";
+import type { ReclaimExtractionProfile, ReclaimProofContextBinding } from "./types.js";
 
 export interface ReclaimProofEvidence {
   providerProofId: string;
@@ -35,6 +36,44 @@ export function extractReclaimProofEvidence(
     },
     extracted
   };
+}
+
+export function assertReclaimProofContextBound(proof: unknown, expectedProofContext: ProviderProofContext): void {
+  const actual = extractReclaimProofContextBinding(proof);
+  const expected = buildReclaimProofContextBinding(expectedProofContext);
+
+  if (!actual) {
+    throw new TypeError("Reclaim proof does not include FulfillPay proof context binding.");
+  }
+
+  if (
+    actual.protocol !== expected.protocol ||
+    actual.version !== expected.version ||
+    actual.provider !== expected.provider ||
+    actual.proofContextHash !== expected.proofContextHash ||
+    !providerProofContextsEqual(actual.proofContext, expected.proofContext)
+  ) {
+    throw new TypeError("Reclaim proof context binding does not match FulfillPay proof context.");
+  }
+}
+
+export function extractReclaimProofContextBinding(proof: unknown): ReclaimProofContextBinding | null {
+  const object = asRecord(proof, "reclaimProof");
+  const candidates = [
+    object.context,
+    readPath(object, ["claimData", "context"]),
+    readPath(object, ["claimData", "parameters", "context"]),
+    readPath(object, ["publicOptions", "context"])
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = parseContextCandidate(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
 }
 
 function extractProviderProofId(proof: unknown): string {
@@ -75,7 +114,7 @@ function extractObservedAt(proof: unknown): UnixMillis {
     return normalizeUIntString(BigInt(timestampSeconds) * 1000n, "reclaimProof.observedAt") as UnixMillis;
   }
 
-  return normalizeUIntString(Date.now(), "reclaimProof.observedAt") as UnixMillis;
+  throw new TypeError("Reclaim proof does not include an observed timestamp.");
 }
 
 function extractResponseStatus(proof: unknown): number {
@@ -203,6 +242,78 @@ function readPath(object: Record<string, unknown>, path: string[]): unknown {
   }
 
   return current;
+}
+
+function parseContextCandidate(candidate: unknown): ReclaimProofContextBinding | null {
+  const parsed = typeof candidate === "string" ? parseJsonObject(candidate) : candidate;
+  if (!isRecord(parsed)) {
+    return null;
+  }
+
+  const object = isRecord(parsed.fulfillpay) ? parsed.fulfillpay : parsed;
+  const proofContext = object.proofContext;
+
+  if (
+    object.protocol !== "FulfillPay" ||
+    object.version !== 1 ||
+    object.provider !== "reclaim" ||
+    typeof object.proofContextHash !== "string" ||
+    !isProviderProofContext(proofContext)
+  ) {
+    return null;
+  }
+
+  return {
+    protocol: object.protocol,
+    version: object.version,
+    provider: object.provider,
+    proofContextHash: object.proofContextHash as ReclaimProofContextBinding["proofContextHash"],
+    proofContext
+  };
+}
+
+function parseJsonObject(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function isProviderProofContext(value: unknown): value is ProviderProofContext {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.protocol === "string" &&
+    typeof value.version === "number" &&
+    typeof value.chainId === "string" &&
+    typeof value.settlementContract === "string" &&
+    typeof value.taskId === "string" &&
+    typeof value.taskNonce === "string" &&
+    typeof value.commitmentHash === "string" &&
+    typeof value.buyer === "string" &&
+    typeof value.seller === "string" &&
+    typeof value.callIndex === "number" &&
+    typeof value.callIntentHash === "string"
+  );
+}
+
+function providerProofContextsEqual(left: ProviderProofContext, right: ProviderProofContext): boolean {
+  return (
+    left.protocol === right.protocol &&
+    left.version === right.version &&
+    left.chainId === right.chainId &&
+    left.settlementContract === right.settlementContract &&
+    left.taskId === right.taskId &&
+    left.taskNonce === right.taskNonce &&
+    left.commitmentHash === right.commitmentHash &&
+    left.buyer === right.buyer &&
+    left.seller === right.seller &&
+    left.callIndex === right.callIndex &&
+    left.callIntentHash === right.callIntentHash
+  );
 }
 
 function asRecord(value: unknown, fieldName: string): Record<string, unknown> {

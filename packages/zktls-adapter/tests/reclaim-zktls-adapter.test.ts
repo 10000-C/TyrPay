@@ -36,7 +36,8 @@ class FakeReclaimClient implements ReclaimClientLike {
     return {
       identifier: "reclaim-proof-test",
       claimData: {
-        timestampS: "1735686000"
+        timestampS: "1735686000",
+        context: publicOptions.context
       },
       response: {
         status: 200
@@ -115,6 +116,7 @@ test("reclaim provenFetch maps request options and builds a raw proof envelope",
   assert.equal(result.extracted.usage.totalTokens, 128);
   assert.equal(await adapter.verifyRawProof(result.rawProof), true);
   assert.equal(result.rawProof.proofHash, hashReclaimRawProofPayload(toReclaimRawProofPayload(result.rawProof)));
+  const proofContext = (result.rawProof.reclaimProof as { claimData: { context: string } }).claimData.context;
 
   assert.deepEqual(client.capturedArgs, [
     "https://api.openai.com/v1/chat/completions",
@@ -131,7 +133,8 @@ test("reclaim provenFetch maps request options and builds a raw proof envelope",
             content: "ping"
           }
         ]
-      }
+      },
+      context: proofContext
     },
     {
       headers: {
@@ -189,6 +192,38 @@ test("reclaim verifyRawProof rejects envelope tampering", async () => {
   const tampered = structuredClone(rawProof);
 
   tampered.extracted.usage.totalTokens += 1;
+
+  assert.equal(await adapter.verifyRawProof(tampered), false);
+});
+
+test("reclaim verifyRawProof rejects rehashed envelopes that diverge from native proof evidence", async () => {
+  const adapter = new ReclaimZkTlsAdapter({
+    appId: "app-id",
+    appSecret: "app-secret",
+    clientFactory: () => new FakeReclaimClient(),
+    verifyProof: () => true
+  });
+  const { rawProof } = await adapter.provenFetch(createBaseInput());
+  const tampered = structuredClone(rawProof);
+
+  tampered.extracted.model = "gpt-4o";
+  tampered.proofHash = hashReclaimRawProofPayload(toReclaimRawProofPayload(tampered));
+
+  assert.equal(await adapter.verifyRawProof(tampered), false);
+});
+
+test("reclaim verifyRawProof rejects native proofs without FulfillPay context binding", async () => {
+  const adapter = new ReclaimZkTlsAdapter({
+    appId: "app-id",
+    appSecret: "app-secret",
+    clientFactory: () => new FakeReclaimClient(),
+    verifyProof: () => true
+  });
+  const { rawProof } = await adapter.provenFetch(createBaseInput());
+  const tampered = structuredClone(rawProof);
+
+  delete (tampered.reclaimProof as { claimData: { context?: string } }).claimData.context;
+  tampered.proofHash = hashReclaimRawProofPayload(toReclaimRawProofPayload(tampered));
 
   assert.equal(await adapter.verifyRawProof(tampered), false);
 });

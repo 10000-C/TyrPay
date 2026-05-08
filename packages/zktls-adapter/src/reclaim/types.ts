@@ -48,6 +48,7 @@ export interface ReclaimPublicOptions {
   method: string;
   headers?: Record<string, string>;
   body?: unknown;
+  context: string;
 }
 
 export interface ReclaimPrivateOptions {
@@ -101,4 +102,12 @@ export interface ReclaimRawProofPayload {
 
 export interface ReclaimRawProof extends ReclaimRawProofPayload {
   proofHash: Bytes32;
+}
+
+export interface ReclaimProofContextBinding {
+  protocol: "FulfillPay";
+  version: 1;
+  provider: typeof RECLAIM_ZKTLS_PROVIDER;
+  proofContextHash: Bytes32;
+  proofContext: ProviderProofContext;
 }
