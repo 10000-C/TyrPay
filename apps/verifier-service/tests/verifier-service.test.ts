@@ -13,7 +13,17 @@ import {
   type ProofBundle
 } from "@fulfillpay/sdk-core";
 import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
-import { MockZkTlsAdapter, type MockScenario } from "@fulfillpay/zktls-adapter";
+import {
+  MockZkTlsAdapter,
+  ReclaimZkTlsAdapter,
+  hashReclaimRawProofPayload,
+  toReclaimRawProofPayload,
+  type MockScenario,
+  type ReclaimClientLike,
+  type ReclaimPrivateOptions,
+  type ReclaimPublicOptions,
+  type ReclaimRawProof
+} from "@fulfillpay/zktls-adapter";
 import { Wallet, verifyTypedData } from "ethers";
 
 import {
@@ -69,6 +79,11 @@ interface BuildFixtureOptions {
   taskCommitmentHash?: Bytes32;
   callIntentHash?: Bytes32;
   proofBundleConsumed?: boolean;
+}
+
+interface BuildReclaimFixtureOptions {
+  mutateRawProof?: (rawProof: ReclaimRawProof) => ReclaimRawProof;
+  mutateReceipt?: (receipt: DeliveryReceipt, rawProof: ReclaimRawProof) => DeliveryReceipt;
 }
 
 class MockSettlementReader implements SettlementTaskReader {
@@ -142,6 +157,37 @@ class FakePrismaClient implements PrismaProofConsumptionRegistryClient {
   readonly proofConsumptionKey = new FakeProofConsumptionKeyDelegate();
 }
 
+class FakeReclaimClient implements ReclaimClientLike {
+  async zkFetch(
+    _url: string,
+    publicOptions: ReclaimPublicOptions,
+    _privateOptions?: ReclaimPrivateOptions,
+    _retries?: number,
+    _retryInterval?: number
+  ): Promise<unknown> {
+    return {
+      identifier: "reclaim-verifier-proof",
+      claimData: {
+        timestampS: "1735686000",
+        context: publicOptions.context
+      },
+      response: {
+        status: 200
+      },
+      extractedParameterValues: {
+        data: JSON.stringify({
+          id: "chatcmpl-verifier-test",
+          model: "gpt-4o-mini",
+          usage: {
+            total_tokens: 128
+          },
+          choices: []
+        })
+      }
+    };
+  }
+}
+
 test("signs a passing verification report for contract settlement", async () => {
   const fixture = await buildFixture();
   const result = await fixture.verifier.verifyTask(fixture.task.taskId);
@@ -169,6 +215,46 @@ test("signs a passing verification report for contract settlement", async () => 
 
   const restoredReport = await fixture.storage.getObject(result.reportPointer);
   assert.deepEqual(restoredReport, result.report);
+});
+
+test("verifies proof bundles produced by the Reclaim zkTLS adapter", async () => {
+  const fixture = await buildReclaimFixture();
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+
+  assert.equal(result.report.passed, true);
+  assert.equal(result.report.settlement.action, "RELEASE");
+  assert.equal(result.checks.zkTlsProofValid, true);
+  assert.equal(result.checks.taskContextMatched, true);
+  assert.equal(result.checks.modelMatched, true);
+  assert.equal(result.checks.usageSatisfied, true);
+  assert.equal(result.aggregateUsage.totalTokens, 128);
+});
+
+test("fails Reclaim verification when a rehashed envelope diverges from native proof evidence", async () => {
+  const fixture = await buildReclaimFixture({
+    mutateRawProof: (rawProof) => {
+      const tamperedRawProof = structuredClone(rawProof);
+      tamperedRawProof.extracted.usage.totalTokens = 512;
+      tamperedRawProof.proofHash = hashReclaimRawProofPayload(toReclaimRawProofPayload(tamperedRawProof));
+
+      return tamperedRawProof;
+    },
+    mutateReceipt: (receipt, rawProof) => {
+      return {
+        ...receipt,
+        rawProofHash: hashObject(rawProof),
+        extracted: rawProof.extracted
+      };
+    }
+  });
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { markProofsConsumed: false });
+
+  assert.equal(result.report.passed, false);
+  assert.equal(result.checks.zkTlsProofValid, false);
+  assert.equal(result.checks.endpointMatched, false);
+  assert.equal(result.checks.modelMatched, false);
+  assert.equal(result.checks.usageSatisfied, false);
+  assert.equal(result.aggregateUsage.totalTokens, 0);
 });
 
 test("rejects signing reports whose passed flag does not match required checks", async () => {
@@ -574,6 +660,140 @@ test("persists consumed proof keys through the Prisma registry adapter", async (
   assert.equal(await registry.hasAny(keys), true);
   await assert.rejects(() => registry.markConsumed(keys, record), /already consumed/);
 });
+
+async function buildReclaimFixture(options: BuildReclaimFixtureOptions = {}) {
+  const storage = new MemoryStorageAdapter();
+  const reclaimZkTlsAdapter = new ReclaimZkTlsAdapter({
+    appId: "app-id",
+    appSecret: "app-secret",
+    clientFactory: () => new FakeReclaimClient(),
+    verifyProof: () => true
+  });
+  const verifierWallet = new Wallet(PRIVATE_KEY);
+  const verifierAddress = verifierWallet.address.toLowerCase() as Address;
+  const commitment: ExecutionCommitment = {
+    schemaVersion: "fulfillpay.execution-commitment.v1",
+    taskId: TASK_ID,
+    buyer: BUYER,
+    seller: SELLER,
+    target: {
+      host: "api.openai.com",
+      path: "/v1/chat/completions",
+      method: "POST"
+    },
+    allowedModels: ["gpt-4o-mini"],
+    minUsage: {
+      totalTokens: 120
+    },
+    deadline: DEADLINE,
+    verifier: verifierAddress
+  };
+  const commitmentHash = hashExecutionCommitment(commitment);
+  const commitmentPointer = await storage.putObject(commitment, { namespace: "commitments" });
+  assert.equal(commitmentPointer.hash, commitmentHash);
+
+  const taskContext = {
+    schemaVersion: "fulfillpay.task-context.v1",
+    protocol: "FulfillPay",
+    version: 1,
+    chainId: CHAIN_ID,
+    settlementContract: SETTLEMENT_CONTRACT,
+    taskId: TASK_ID,
+    taskNonce: TASK_NONCE,
+    commitmentHash,
+    buyer: BUYER,
+    seller: SELLER
+  } as const;
+  const requestBody = {
+    model: "gpt-4o-mini",
+    messages: [{ role: "user", content: "prove this call with Reclaim" }]
+  };
+  const callIntentHash = buildCallIntentHash({
+    taskContext,
+    callIndex: 0,
+    host: commitment.target.host,
+    path: commitment.target.path,
+    method: commitment.target.method,
+    declaredModel: "gpt-4o-mini",
+    requestBodyHash: hashObject(requestBody)
+  });
+  const { rawProof: baseRawProof } = await reclaimZkTlsAdapter.provenFetch({
+    taskContext,
+    callIndex: 0,
+    callIntentHash,
+    request: {
+      host: commitment.target.host,
+      path: commitment.target.path,
+      method: commitment.target.method,
+      body: requestBody
+    },
+    declaredModel: "gpt-4o-mini",
+    privateOptions: {
+      headers: {
+        authorization: "Bearer test"
+      }
+    },
+    retries: 2,
+    retryIntervalMs: 500,
+    useTee: true
+  });
+  const rawProof = options.mutateRawProof ? options.mutateRawProof(baseRawProof) : baseRawProof;
+  const rawProofPointer = await storage.putObject(rawProof, { namespace: "raw-proofs" });
+  const baseReceipt = await reclaimZkTlsAdapter.normalizeReceipt(baseRawProof, {
+    taskContext,
+    callIndex: 0,
+    callIntentHash,
+    rawProofURI: rawProofPointer.uri
+  });
+  const receipt = options.mutateReceipt ? options.mutateReceipt(baseReceipt, rawProof) : baseReceipt;
+
+  const proofBundle: ProofBundle = {
+    schemaVersion: "fulfillpay.proof-bundle.v1",
+    taskId: TASK_ID,
+    commitmentHash,
+    seller: SELLER,
+    receipts: [receipt],
+    aggregateUsage: {
+      totalTokens: receipt.extracted.usage.totalTokens
+    },
+    createdAt: "1735686600000"
+  };
+  const proofBundlePointer = await storage.putObject(proofBundle, { namespace: "proof-bundles" });
+  const task: OnChainTask = {
+    taskId: TASK_ID,
+    taskNonce: TASK_NONCE,
+    buyer: BUYER,
+    seller: SELLER,
+    token: TOKEN,
+    amount: "1000000",
+    deadline: DEADLINE,
+    commitmentHash,
+    commitmentURI: commitmentPointer.uri,
+    fundedAt: FUNDED_AT,
+    proofBundleHash: proofBundlePointer.hash,
+    proofBundleURI: proofBundlePointer.uri,
+    proofSubmittedAt: "1735686700000",
+    status: "PROOF_SUBMITTED"
+  };
+  const settlement = new MockSettlementReader(task);
+  const verifier = new CentralizedVerifier({
+    settlement,
+    storage,
+    signer: verifierWallet,
+    zktlsAdapters: [reclaimZkTlsAdapter],
+    consumptionRegistry: new InMemoryProofConsumptionRegistry(),
+    clock: () => VERIFIED_AT
+  });
+
+  return {
+    verifier,
+    task,
+    storage,
+    commitment,
+    proofBundle,
+    rawProof
+  };
+}
 
 async function buildFixture(options: BuildFixtureOptions = {}) {
   const storage = new MemoryStorageAdapter();
