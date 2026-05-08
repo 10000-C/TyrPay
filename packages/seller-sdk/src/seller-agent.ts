@@ -46,6 +46,8 @@ export interface ProvenFetchInput {
   declaredModel: string;
   /** Task nonce (from on-chain task) */
   taskNonce: Bytes32;
+  /** Optional provider-specific parameters passed through to the zkTLS adapter */
+  providerOptions?: Record<string, unknown>;
 }
 
 /**
@@ -203,7 +205,8 @@ export class SellerAgent {
       callIndex: input.callIndex,
       callIntentHash,
       request: input.request,
-      declaredModel: input.declaredModel
+      declaredModel: input.declaredModel,
+      ...(input.providerOptions ?? {})
     };
 
     const result = await this.zkTlsAdapter.provenFetch(provenFetchInput as Parameters<typeof this.zkTlsAdapter.provenFetch>[0]);

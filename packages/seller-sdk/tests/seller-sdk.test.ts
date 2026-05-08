@@ -90,6 +90,15 @@ function createSellerAgent(): SellerAgent {
   return new SellerAgent(config);
 }
 
+class CapturingMockZkTlsAdapter extends MockZkTlsAdapter {
+  capturedInput: unknown;
+
+  override async provenFetch(input: Parameters<MockZkTlsAdapter["provenFetch"]>[0]) {
+    this.capturedInput = input;
+    return super.provenFetch(input);
+  }
+}
+
 // ── Tests ────────────────────────────────────────────────────────
 
 test("SellerAgent constructor normalizes config fields", () => {
@@ -216,6 +225,51 @@ test("provenFetch produces a valid DeliveryReceipt", async () => {
 
   const restoredReceipt = await agent.storageAdapter.getObject<DeliveryReceipt>(result.receiptPointer);
   assert.deepEqual(restoredReceipt, receipt);
+});
+
+test("provenFetch passes providerOptions through to the zkTLS adapter", async () => {
+  const adapter = new CapturingMockZkTlsAdapter();
+  const agent = new SellerAgent({
+    signer: createMockSigner(),
+    settlementContract: SETTLEMENT_CONTRACT,
+    chainId: CHAIN_ID,
+    storageAdapter: new MemoryStorageAdapter(),
+    zkTlsAdapter: adapter
+  });
+  const commitment = commitmentFixture.object;
+  const providerOptions = {
+    privateOptions: {
+      headers: {
+        authorization: "Bearer test"
+      }
+    },
+    retries: 2,
+    retryIntervalMs: 500,
+    useTee: true
+  };
+
+  await agent.provenFetch({
+    commitment,
+    callIndex: 0,
+    request: {
+      host: "api.openai.com",
+      path: "/v1/chat/completions",
+      method: "POST"
+    },
+    declaredModel: "gpt-4o-mini",
+    taskNonce: TASK_NONCE,
+    providerOptions
+  });
+
+  const capturedInput = adapter.capturedInput as Record<string, unknown>;
+  assert.deepEqual(capturedInput.privateOptions, providerOptions.privateOptions);
+  assert.equal(capturedInput.retries, providerOptions.retries);
+  assert.equal(capturedInput.retryIntervalMs, providerOptions.retryIntervalMs);
+  assert.equal(capturedInput.useTee, providerOptions.useTee);
+  assert.equal(capturedInput.declaredModel, "gpt-4o-mini");
+  assert.equal(capturedInput.callIndex, 0);
+  assert.ok(capturedInput.taskContext);
+  assert.ok(capturedInput.callIntentHash);
 });
 
 // ── buildDeliveryReceipt tests ───────────────────────────────────
