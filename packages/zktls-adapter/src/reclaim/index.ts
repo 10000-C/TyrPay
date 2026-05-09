@@ -195,14 +195,25 @@ export function toReclaimRawProofPayload(rawProof: ReclaimRawProof): ReclaimRawP
 
 export async function defaultVerifyReclaimProof(proof: unknown): Promise<boolean> {
   const module = (await dynamicImport("@reclaimprotocol/js-sdk")) as {
-    verifyProof?: ReclaimProofVerifier;
+    verifyProof?: (proof: unknown, config: Record<string, unknown>) => Promise<unknown>;
   };
 
   if (typeof module.verifyProof !== "function") {
     throw new TypeError("@reclaimprotocol/js-sdk does not export verifyProof.");
   }
 
-  return Boolean(await module.verifyProof(proof));
+  const verificationConfig = buildReclaimVerificationConfig(proof);
+  const result = await module.verifyProof(proof, verificationConfig);
+
+  if (typeof result === "boolean") {
+    return result;
+  }
+
+  if (isPlainRecord(result) && typeof result.isVerified === "boolean") {
+    return result.isVerified;
+  }
+
+  throw new TypeError("@reclaimprotocol/js-sdk verifyProof returned an unsupported result.");
 }
 
 export * from "./client.js";
@@ -252,4 +263,49 @@ function assertString(value: unknown, fieldName: string): asserts value is strin
   if (typeof value !== "string" || value.length === 0) {
     throw new TypeError(`${fieldName} must be a non-empty string.`);
   }
+}
+
+function buildReclaimVerificationConfig(proof: unknown): Record<string, unknown> {
+  const object = assertRecord(proof, "reclaimProof");
+  const claimData = assertRecord(object.claimData, "reclaimProof.claimData");
+  const parsedContext = parseJsonObject(claimData.context);
+
+  if (
+    isPlainRecord(parsedContext) &&
+    typeof parsedContext.providerHash === "string" &&
+    parsedContext.providerHash.length > 0
+  ) {
+    return {
+      hashes: [parsedContext.providerHash]
+    };
+  }
+
+  if (typeof claimData.provider === "string" && claimData.provider.length > 0) {
+    return {
+      providerId: claimData.provider
+    };
+  }
+
+  throw new TypeError("Reclaim proof does not include provider verification metadata.");
+}
+
+function parseJsonObject(value: unknown): unknown {
+  if (typeof value !== "string" || value.length === 0) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }

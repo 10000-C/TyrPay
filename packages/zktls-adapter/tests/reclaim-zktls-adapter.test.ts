@@ -51,7 +51,17 @@ class FakeReclaimClient implements ReclaimClientLike {
           usage: {
             total_tokens: 128
           },
-          choices: []
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: "assistant",
+                content: "pong"
+              },
+              logprobs: null,
+              finish_reason: "stop"
+            }
+          ]
         })
       }
     };
@@ -116,7 +126,27 @@ test("reclaim provenFetch maps request options and builds a raw proof envelope",
   assert.equal(result.extracted.usage.totalTokens, 128);
   assert.equal(await adapter.verifyRawProof(result.rawProof), true);
   assert.equal(result.rawProof.proofHash, hashReclaimRawProofPayload(toReclaimRawProofPayload(result.rawProof)));
-  const proofContext = (result.rawProof.reclaimProof as { claimData: { context: string } }).claimData.context;
+  const proofContext = (result.rawProof.reclaimProof as { claimData: { context: Record<string, unknown> } }).claimData
+    .context;
+  assert.deepEqual(result.rawProof.response.body, {
+    id: "chatcmpl-test",
+    object: "chat.completion",
+    created: 1735686000,
+    model: "gpt-4o-mini",
+    usage: {
+      total_tokens: 128
+    },
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: "pong"
+        },
+        finish_reason: "stop"
+      }
+    ]
+  });
 
   assert.deepEqual(client.capturedArgs, [
     "https://api.openai.com/v1/chat/completions",
@@ -125,7 +155,7 @@ test("reclaim provenFetch maps request options and builds a raw proof envelope",
       headers: {
         "content-type": "application/json"
       },
-      body: {
+      body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [
           {
@@ -133,8 +163,9 @@ test("reclaim provenFetch maps request options and builds a raw proof envelope",
             content: "ping"
           }
         ]
-      },
-      context: proofContext
+      }),
+      context: proofContext,
+      useTee: true
     },
     {
       headers: {
@@ -222,7 +253,7 @@ test("reclaim verifyRawProof rejects native proofs without FulfillPay context bi
   const { rawProof } = await adapter.provenFetch(createBaseInput());
   const tampered = structuredClone(rawProof);
 
-  delete (tampered.reclaimProof as { claimData: { context?: string } }).claimData.context;
+  delete (tampered.reclaimProof as { claimData: { context?: Record<string, unknown> } }).claimData.context;
   tampered.proofHash = hashReclaimRawProofPayload(toReclaimRawProofPayload(tampered));
 
   assert.equal(await adapter.verifyRawProof(tampered), false);

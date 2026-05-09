@@ -156,14 +156,23 @@ export function buildReclaimPublicOptions(
   return {
     method: request.method,
     ...(request.headers ? { headers: request.headers } : {}),
-    ...(request.body !== undefined ? { body: request.body } : {}),
-    context: JSON.stringify(buildReclaimProofContextBinding(proofContext)),
+    ...(request.body !== undefined ? { body: serializeReclaimBody(request.body, "request.body") } : {}),
+    context: buildReclaimProofContextBinding(proofContext) as unknown as Record<string, unknown>,
     ...(input.useTee ? { useTee: true } : {})
   };
 }
 
 export function buildReclaimPrivateOptions(input: ReclaimProvenFetchInput): ReclaimPrivateOptions | undefined {
-  return input.privateOptions;
+  if (!input.privateOptions) {
+    return undefined;
+  }
+
+  return {
+    ...input.privateOptions,
+    ...(input.privateOptions.body !== undefined
+      ? { body: serializeReclaimBody(input.privateOptions.body, "privateOptions.body") }
+      : {})
+  };
 }
 
 export function hashReclaimProofContext(proofContext: ProviderProofContext): Bytes32 {
@@ -178,4 +187,18 @@ export function buildReclaimProofContextBinding(proofContext: ProviderProofConte
     proofContextHash: hashReclaimProofContext(proofContext),
     proofContext
   };
+}
+
+function serializeReclaimBody(value: unknown, fieldName: string): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch (error) {
+    throw new TypeError(`${fieldName} must be JSON-serializable for Reclaim zkFetch.`, {
+      cause: error
+    });
+  }
 }

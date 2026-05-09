@@ -48,14 +48,14 @@ export type ReclaimProofVerifier = (proof: unknown) => Promise<boolean> | boolea
 export interface ReclaimPublicOptions {
   method: string;
   headers?: Record<string, string>;
-  body?: unknown;
-  context: string;
+  body?: string;
+  context: Record<string, unknown>;
   useTee?: boolean;
 }
 
 export interface ReclaimPrivateOptions {
   headers?: Record<string, string>;
-  body?: unknown;
+  body?: string;
   cookieStr?: string;
   paramValues?: Record<string, string>;
   responseMatches?: Array<{ type: "contains" | "regex"; value: string }>;

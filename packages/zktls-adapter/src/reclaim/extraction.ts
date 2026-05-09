@@ -181,7 +181,7 @@ function extractOpenAiCompatibleFields(body: unknown): ExtractedReceiptFields {
 
 function parseMaybeJson(value: unknown): unknown {
   if (typeof value !== "string") {
-    return value;
+    return sanitizeCanonicalJsonShape(value);
   }
 
   const decoded = decodeChunkedResponse(value).trim();
@@ -189,7 +189,7 @@ function parseMaybeJson(value: unknown): unknown {
     throw new TypeError("Response body is empty.");
   }
 
-  return JSON.parse(decoded);
+  return sanitizeCanonicalJsonShape(JSON.parse(decoded));
 }
 
 function decodeChunkedResponse(value: string): string {
@@ -331,4 +331,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+function sanitizeCanonicalJsonShape(value: unknown): unknown {
+  if (value === null) {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => sanitizeCanonicalJsonShape(item))
+      .filter((item) => item !== undefined);
+  }
+
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, item]) => {
+      const sanitized = sanitizeCanonicalJsonShape(item);
+      return sanitized === undefined ? [] : [[key, sanitized]];
+    })
+  );
 }
