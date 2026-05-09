@@ -20,6 +20,7 @@ import {
   type URI,
   type UnixMillis
 } from "@fulfillpay/sdk-core";
+import { performance } from "node:perf_hooks";
 import type { StorageAdapter, StoragePointer } from "@fulfillpay/storage-adapter";
 import type { ZkTlsAdapter, ZkTlsReceiptContext, ZkTlsRequestEvidence } from "@fulfillpay/zktls-adapter";
 
@@ -170,6 +171,20 @@ export class SellerAgent {
    * @returns The delivery receipt and raw proof
    */
   async provenFetch(input: ProvenFetchInput): Promise<ProvenFetchOutput> {
+    const collectTiming = process.env.FULFILLPAY_E2E_TIMING === "1";
+    const startedAt = performance.now();
+    const timings: Array<{ step: string; ms: number }> = [];
+    const recordTiming = (step: string, stepStartedAt: number) => {
+      if (!collectTiming) {
+        return;
+      }
+
+      timings.push({
+        step,
+        ms: Math.round(performance.now() - stepStartedAt)
+      });
+    };
+
     assertExecutionCommitment(input.commitment);
 
     // Validate endpoint matches commitment target (architecture doc §4.2)
@@ -209,12 +224,16 @@ export class SellerAgent {
       ...(input.providerOptions ?? {})
     };
 
+    const adapterStartedAt = performance.now();
     const result = await this.zkTlsAdapter.provenFetch(provenFetchInput as Parameters<typeof this.zkTlsAdapter.provenFetch>[0]);
+    recordTiming("zkTlsAdapter.provenFetch", adapterStartedAt);
 
     // Upload the raw proof to storage first to get a URI
+    const rawProofUploadStartedAt = performance.now();
     const rawProofPointer = await this.storageAdapter.putObject(result.rawProof, {
       namespace: "raw-proofs"
     });
+    recordTiming("storage.putObject(rawProof)", rawProofUploadStartedAt);
 
     // Build the receipt context for normalization
     const receiptContext: ZkTlsReceiptContext = {
@@ -225,10 +244,22 @@ export class SellerAgent {
     };
 
     // Normalize the raw proof into a DeliveryReceipt
+    const normalizeReceiptStartedAt = performance.now();
     const receipt = await this.zkTlsAdapter.normalizeReceipt(result.rawProof, receiptContext);
+    recordTiming("zkTlsAdapter.normalizeReceipt", normalizeReceiptStartedAt);
+
+    const receiptUploadStartedAt = performance.now();
     const receiptPointer = await this.storageAdapter.putObject(receipt, {
       namespace: "receipts"
     });
+    recordTiming("storage.putObject(receipt)", receiptUploadStartedAt);
+
+    if (collectTiming) {
+      console.log(`[timing] SellerAgent.provenFetch.total: ${Math.round(performance.now() - startedAt)}ms`);
+      for (const timing of timings) {
+        console.log(`[timing] SellerAgent.provenFetch.${timing.step}: ${timing.ms}ms`);
+      }
+    }
 
     return {
       receipt,

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { type Server } from "node:http";
+import { performance } from "node:perf_hooks";
 import path from "node:path";
 
 import * as dotenv from "dotenv";
@@ -60,13 +61,31 @@ type UriRecord = {
   hash?: string;
 };
 
+type TimingRecord = {
+  step: string;
+  ms: number;
+};
+
 async function main() {
   const txs: TxRecord[] = [];
   const uris: UriRecord[] = [];
+  const timings: TimingRecord[] = [];
   let stage = "bootstrap";
+  const runStartedAt = performance.now();
+
+  async function measureStep<T>(label: string, fn: () => Promise<T>): Promise<T> {
+    const startedAt = performance.now();
+    try {
+      return await fn();
+    } finally {
+      const ms = Math.round(performance.now() - startedAt);
+      timings.push({ step: label, ms });
+      console.log(`[timing] ${label}: ${ms}ms`);
+    }
+  }
 
   try {
-    const rpcUrl = requireEnv("ZERO_G_EVM_RPC");
+    const rpcUrl = await measureStep("bootstrap.require-env-and-wallets", async () => requireEnv("ZERO_G_EVM_RPC"));
     const settlementAddress = normalizeAddress(requireEnv("SETTLEMENT_CONTRACT"), "SETTLEMENT_CONTRACT");
     const buyerWallet = buildWalletFromEnv("BUYER_PRIVATE_KEY", rpcUrl);
     const sellerWallet = buildWalletFromEnv("SELLER_PRIVATE_KEY", rpcUrl);
@@ -77,7 +96,7 @@ async function main() {
       throw new Error("Buyer wallet provider is unavailable.");
     }
 
-    const network = await provider.getNetwork();
+    const network = await measureStep("bootstrap.network", async () => provider.getNetwork());
     const envChainId = process.env.CHAIN_ID?.trim();
     if (envChainId && BigInt(envChainId) !== network.chainId) {
       throw new Error(`CHAIN_ID=${envChainId} does not match provider chainId=${network.chainId.toString()}.`);
@@ -91,26 +110,40 @@ async function main() {
     const settlementAsSeller = settlement.connect(sellerWallet);
 
     stage = "verifier-registry";
-    const verifierRegistryAddress = normalizeAddress(await settlement.verifierRegistry(), "verifierRegistry");
+    const verifierRegistryAddress = normalizeAddress(
+      await measureStep("verifier-registry.load-address", async () => settlement.verifierRegistry()),
+      "verifierRegistry"
+    );
     const verifierRegistry = VerifierRegistry__factory.connect(verifierRegistryAddress, ownerWallet);
-    await ensureOwnerAccess(settlementAsOwner, verifierRegistry, ownerWallet.address);
-    const authorizeTx = await ensureVerifierAuthorized(verifierRegistry, verifierWallet.address);
+    await measureStep("verifier-registry.ensure-owner-access", async () =>
+      ensureOwnerAccess(settlementAsOwner, verifierRegistry, ownerWallet.address)
+    );
+    const authorizeTx = await measureStep("verifier-registry.ensure-authorized", async () =>
+      ensureVerifierAuthorized(verifierRegistry, verifierWallet.address)
+    );
     if (authorizeTx) {
       txs.push({ label: "authorize verifier", hash: authorizeTx });
     }
 
     stage = "token-setup";
-    const mockToken = await deployAndAllowMockToken(settlementAsOwner, ownerWallet, txs);
-    await fundBuyerAndApprove(mockToken, buyerWallet, settlementAddress, txs);
+    const mockToken = await measureStep("token-setup.deploy-and-allow", async () =>
+      deployAndAllowMockToken(settlementAsOwner, ownerWallet, txs)
+    );
+    await measureStep("token-setup.fund-and-approve", async () =>
+      fundBuyerAndApprove(mockToken, buyerWallet, settlementAddress, txs)
+    );
 
     stage = "adapter-setup";
-    const storage = new ZeroGStorageAdapter({
-      transport: createZeroGStorageTransport({
-        indexer: requireEnv("ZERO_G_INDEXER_RPC"),
-        evmRpc: rpcUrl,
-        signer: sellerWallet,
-        withProof: true
-      })
+    const storage = await measureStep("adapter-setup.storage-and-services", async () => {
+      const storageAdapter = new ZeroGStorageAdapter({
+        transport: createZeroGStorageTransport({
+          indexer: requireEnv("ZERO_G_INDEXER_RPC"),
+          evmRpc: rpcUrl,
+          signer: sellerWallet,
+          withProof: true
+        })
+      });
+      return storageAdapter;
     });
     const zkTlsAdapter = new ReclaimZkTlsAdapter({
       appId: requireEnv("RECLAIM_APP_ID"),
@@ -134,7 +167,8 @@ async function main() {
         settlementAddress,
         runner: verifierWallet as unknown as ConstructorParameters<typeof EthersSettlementTaskReader>[0]["runner"],
         chainId: network.chainId
-      }),
+      })
+      ,
       storage,
       signer: verifierWallet as unknown as import("@fulfillpay/verifier-service").VerificationReportSigner,
       zktlsAdapters: [zkTlsAdapter],
@@ -148,130 +182,160 @@ async function main() {
         return BigInt(block.timestamp) * 1000n;
       }
     });
-
     const verifierServer = createVerifierHttpServer({ verifier: verifierService });
-    const verifierBaseUrl = await listenOnEphemeralPort(verifierServer);
+    const verifierBaseUrl = await measureStep("adapter-setup.start-verifier-http", async () =>
+      listenOnEphemeralPort(verifierServer)
+    );
 
     try {
       stage = "task-metadata";
-      const currentTimeMs = await settlement.currentTimeMs();
-      const deadlineMs = currentTimeMs + 60n * 60n * 1000n;
-      const taskMetadata = {
-        kind: "live-e2e-reclaim-task-metadata",
-        chainId: network.chainId.toString(),
-        settlement: settlementAddress,
-        seller: sellerWallet.address,
-        verifier: verifierWallet.address,
-        createdAt: currentTimeMs.toString(),
-        modelHost: modelConfig.host,
-        modelPath: modelConfig.path,
-        modelName: modelConfig.model
-      };
-      const metadataPointer = await storage.putObject(taskMetadata, { namespace: "task-metadata" });
+      const { currentTimeMs, deadlineMs, metadataPointer } = await measureStep("task-metadata", async () => {
+        const now = await settlement.currentTimeMs();
+        const deadline = now + 60n * 60n * 1000n;
+        const taskMetadata = {
+          kind: "live-e2e-reclaim-task-metadata",
+          chainId: network.chainId.toString(),
+          settlement: settlementAddress,
+          seller: sellerWallet.address,
+          verifier: verifierWallet.address,
+          createdAt: now.toString(),
+          modelHost: modelConfig.host,
+          modelPath: modelConfig.path,
+          modelName: modelConfig.model
+        };
+        const pointer = await storage.putObject(taskMetadata, { namespace: "task-metadata" });
+        return { currentTimeMs: now, deadlineMs: deadline, metadataPointer: pointer };
+      });
       pushPointer(uris, "metadata", metadataPointer);
 
       stage = "create-task-intent";
-      const created = await buyerSdk.createTaskIntent({
-        seller: sellerWallet.address,
-        token: await mockToken.getAddress(),
-        amount: DEFAULT_AMOUNT,
-        deadline: deadlineMs,
-        metadataHash: metadataPointer.hash,
-        metadataURI: metadataPointer.uri
-      });
+      const created = await measureStep("create-task-intent", async () =>
+        buyerSdk.createTaskIntent({
+          seller: sellerWallet.address,
+          token: await mockToken.getAddress(),
+          amount: DEFAULT_AMOUNT,
+          deadline: deadlineMs,
+          metadataHash: metadataPointer.hash,
+          metadataURI: metadataPointer.uri
+        })
+      );
       txs.push({ label: "create task intent", hash: getReceiptHash(created.receipt, "createTaskIntent") });
-      await expectTaskStatus(buyerSdk, created.taskId, "INTENT_CREATED");
+      await measureStep("create-task-intent.wait-status", async () => expectTaskStatus(buyerSdk, created.taskId, "INTENT_CREATED"));
 
       stage = "submit-commitment";
-      const commitment = buildCommitment({
-        taskId: created.taskId,
-        buyer: buyerWallet.address,
-        seller: sellerWallet.address,
-        deadlineMs,
-        verifier: verifierWallet.address,
-        host: modelConfig.host,
-        path: modelConfig.path,
-        model: modelConfig.model,
-        minTotalTokens
+      const { commitment, commitmentPointer, commitmentResult } = await measureStep("submit-commitment", async () => {
+        const builtCommitment = buildCommitment({
+          taskId: created.taskId,
+          buyer: buyerWallet.address,
+          seller: sellerWallet.address,
+          deadlineMs,
+          verifier: verifierWallet.address,
+          host: modelConfig.host,
+          path: modelConfig.path,
+          model: modelConfig.model,
+          minTotalTokens
+        });
+        const pointer = await storage.putObject(builtCommitment, { namespace: "commitments" });
+        const result = await sellerAgent.submitCommitment(
+          settlementAsSeller as unknown as import("@fulfillpay/seller-sdk").ContractLike,
+          builtCommitment,
+          pointer.uri
+        );
+        return {
+          commitment: builtCommitment,
+          commitmentPointer: pointer,
+          commitmentResult: result
+        };
       });
-      const commitmentPointer = await storage.putObject(commitment, { namespace: "commitments" });
       pushPointer(uris, "commitment", commitmentPointer);
-      const commitmentResult = await sellerAgent.submitCommitment(
-        settlementAsSeller as unknown as import("@fulfillpay/seller-sdk").ContractLike,
-        commitment,
-        commitmentPointer.uri
-      );
       txs.push({ label: "submit commitment", hash: commitmentResult.txHash });
-      await expectTaskStatus(buyerSdk, created.taskId, "COMMITMENT_SUBMITTED");
+      await measureStep("submit-commitment.wait-status", async () =>
+        expectTaskStatus(buyerSdk, created.taskId, "COMMITMENT_SUBMITTED")
+      );
 
       stage = "fund-task";
-      const fundReceipt = await buyerSdk.fundTask(created.taskId, {
-        validateCommitment: {
-          acceptedHosts: [modelConfig.host],
-          acceptedPaths: [modelConfig.path],
-          acceptedMethods: ["POST"],
-          acceptedModels: [modelConfig.model],
-          expectedVerifier: verifierWallet.address,
-          minTotalTokens,
-          requireNonZeroMinUsage: true
-        }
-      });
+      const fundReceipt = await measureStep("fund-task", async () =>
+        buyerSdk.fundTask(created.taskId, {
+          validateCommitment: {
+            acceptedHosts: [modelConfig.host],
+            acceptedPaths: [modelConfig.path],
+            acceptedMethods: ["POST"],
+            acceptedModels: [modelConfig.model],
+            expectedVerifier: verifierWallet.address,
+            minTotalTokens,
+            requireNonZeroMinUsage: true
+          }
+        })
+      );
       txs.push({ label: "fund task", hash: getReceiptHash(fundReceipt, "fundTask") });
-      await expectTaskStatus(buyerSdk, created.taskId, "FUNDED");
-      assert.equal(await buyerSdk.getTaskStatus(created.taskId), "EXECUTING");
+      await measureStep("fund-task.wait-status", async () => expectTaskStatus(buyerSdk, created.taskId, "FUNDED"));
+      await measureStep("fund-task.verify-executing", async () => {
+        assert.equal(await buyerSdk.getTaskStatus(created.taskId), "EXECUTING");
+      });
 
       stage = "seller-proven-fetch";
       const proofPrompt = process.env.MODEL_TEST_PROMPT?.trim() || "Reply with a short sentence for proof generation.";
-      const proofOutput = await sellerAgent.provenFetch({
-        commitment,
-        callIndex: 0,
-        taskNonce: created.taskNonce,
-        declaredModel: modelConfig.model,
-        request: {
-          host: modelConfig.host,
-          path: modelConfig.path,
-          method: "POST",
-          headers: {
-            "content-type": "application/json"
-          },
-          body: {
-            model: modelConfig.model,
-            messages: [{ role: "user", content: proofPrompt }],
-            stream: false
-          }
-        },
-        providerOptions: {
-          privateOptions: {
+      const proofOutput = await measureStep("seller-proven-fetch", async () =>
+        sellerAgent.provenFetch({
+          commitment,
+          callIndex: 0,
+          taskNonce: created.taskNonce,
+          declaredModel: modelConfig.model,
+          request: {
+            host: modelConfig.host,
+            path: modelConfig.path,
+            method: "POST",
             headers: {
-              authorization: `Bearer ${requireEnv("MODEL_API_KEY")}`
+              "content-type": "application/json"
+            },
+            body: {
+              model: modelConfig.model,
+              messages: [{ role: "user", content: proofPrompt }],
+              stream: false
             }
           },
-          retries: 2,
-          retryIntervalMs: 1000,
-          useTee
-        }
-      });
+          providerOptions: {
+            privateOptions: {
+              headers: {
+                authorization: `Bearer ${requireEnv("MODEL_API_KEY")}`
+              }
+            },
+            retries: 2,
+            retryIntervalMs: 1000,
+            useTee
+          }
+        })
+      );
       pushPointer(uris, "raw proof", proofOutput.rawProofPointer);
       pushPointer(uris, "receipt", proofOutput.receiptPointer);
 
       stage = "proof-bundle";
-      const proofBundle = sellerAgent.buildProofBundle({
-        commitment,
-        receipts: [proofOutput.receipt]
+      const { proofBundle, proofBundleUpload, proofSubmitResult } = await measureStep("proof-bundle", async () => {
+        const builtProofBundle = sellerAgent.buildProofBundle({
+          commitment,
+          receipts: [proofOutput.receipt]
+        });
+        const upload = await sellerAgent.uploadProofBundle(builtProofBundle);
+        const submitResult = await sellerAgent.submitProofBundleHash(
+          settlementAsSeller as unknown as import("@fulfillpay/seller-sdk").ContractLike,
+          created.taskId as Bytes32,
+          upload.pointer.hash as Bytes32,
+          upload.pointer.uri
+        );
+        return {
+          proofBundle: builtProofBundle,
+          proofBundleUpload: upload,
+          proofSubmitResult: submitResult
+        };
       });
-      const proofBundleUpload = await sellerAgent.uploadProofBundle(proofBundle);
       pushPointer(uris, "proof bundle", proofBundleUpload.pointer);
-      const proofSubmitResult = await sellerAgent.submitProofBundleHash(
-        settlementAsSeller as unknown as import("@fulfillpay/seller-sdk").ContractLike,
-        created.taskId as Bytes32,
-        proofBundleUpload.pointer.hash as Bytes32,
-        proofBundleUpload.pointer.uri
-      );
       txs.push({ label: "submit proof bundle", hash: proofSubmitResult.txHash });
-      await expectTaskStatus(buyerSdk, created.taskId, "PROOF_SUBMITTED");
+      await measureStep("proof-bundle.wait-status", async () =>
+        expectTaskStatus(buyerSdk, created.taskId, "PROOF_SUBMITTED")
+      );
 
       stage = "verify-task";
-      const verificationResult = await callVerifier(verifierBaseUrl, created.taskId);
+      const verificationResult = await measureStep("verify-task", async () => callVerifier(verifierBaseUrl, created.taskId));
       assert.equal(
         verificationResult.report.passed,
         true,
@@ -281,32 +345,41 @@ async function main() {
       pushPointer(uris, "verification report", verificationResult.reportPointer);
 
       stage = "settle";
-      const settleTx = await settlement.settle(
-        toSettlementReportStruct(verificationResult.report),
-        verificationResult.report.signature
-      );
-      const settleReceipt = await settleTx.wait();
+      const settleReceipt = await measureStep("settle", async () => {
+        const settleTx = await settlement.settle(
+          toSettlementReportStruct(verificationResult.report),
+          verificationResult.report.signature
+        );
+        return settleTx.wait();
+      });
       txs.push({ label: "settle", hash: getReceiptHash(settleReceipt, "settle") });
-      await expectTaskStatus(buyerSdk, created.taskId, "SETTLED");
+      await measureStep("settle.wait-status", async () => expectTaskStatus(buyerSdk, created.taskId, "SETTLED"));
 
       stage = "post-verify";
-      const sellerBalance = await mockToken.balanceOf(sellerWallet.address);
-      const escrowBalance = await mockToken.balanceOf(settlementAddress);
-      assert.equal(sellerBalance, DEFAULT_AMOUNT);
-      assert.equal(escrowBalance, 0n);
+      await measureStep("post-verify", async () => {
+        const sellerBalance = await mockToken.balanceOf(sellerWallet.address);
+        const escrowBalance = await mockToken.balanceOf(settlementAddress);
+        assert.equal(sellerBalance, DEFAULT_AMOUNT);
+        assert.equal(escrowBalance, 0n);
 
-      const restoredProofBundle = await storage.getObject<ProofBundle>(proofBundleUpload.pointer, {
-        expectedHash: proofBundleUpload.pointer.hash
+        const restoredProofBundle = await storage.getObject<ProofBundle>(proofBundleUpload.pointer, {
+          expectedHash: proofBundleUpload.pointer.hash
+        });
+        const restoredReport = await storage.getObject<VerificationReport>(verificationResult.reportPointer, {
+          expectedHash: verificationResult.reportPointer.hash
+        });
+        assert.equal(restoredProofBundle.taskId, created.taskId);
+        assert.deepEqual(restoredReport, verificationResult.report);
       });
-      const restoredReport = await storage.getObject<VerificationReport>(verificationResult.reportPointer, {
-        expectedHash: verificationResult.reportPointer.hash
-      });
-      assert.equal(restoredProofBundle.taskId, created.taskId);
-      assert.deepEqual(restoredReport, verificationResult.report);
 
       console.log(`SUCCESS: Reclaim E2E passed on chain ${network.chainId.toString()}.`);
       console.log(`TaskId: ${created.taskId}`);
       console.log(`Model endpoint: https://${modelConfig.host}${modelConfig.path}`);
+      console.log(`Total duration: ${Math.round(performance.now() - runStartedAt)}ms`);
+      console.log("Timings:");
+      for (const timing of timings) {
+        console.log(`- ${timing.step}: ${timing.ms}ms`);
+      }
       console.log("Transactions:");
       for (const tx of txs) {
         console.log(`- ${tx.label}: ${tx.hash}`);
