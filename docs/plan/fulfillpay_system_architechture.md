@@ -99,6 +99,13 @@ Seller SDK 主要承担以下职责：
 11. 上传 proof 数据到 Storage；
 12. 向合约提交 proofBundleHash。
 
+Seller SDK 与 zkTLS adapter 的接口约定：
+
+1. Seller SDK 对外维持稳定的 `provenFetch` 必填参数：`commitment`、`callIndex`、`request`、`declaredModel`、`taskNonce`。
+2. Seller SDK 允许新增可选 `providerOptions` 字段，用于向具体 zkTLS adapter 透传 provider 私有运行参数。
+3. `providerOptions` 不属于协议对象，不进入 `TaskContext`、`DeliveryReceipt`、`ProofBundle` 或链上状态。
+4. Mock adapter 可以忽略 `providerOptions`；Reclaim adapter 可以消费其中的 `privateOptions`、`retries`、`retryIntervalMs`、`useTee` 等私有参数。
+
 4.3 Task Binding
 
 Phase 1 采用 proof-level task binding。Seller SDK 不强制将 `taskNonce` 注入上游 HTTP 请求；相反，SDK 将任务上下文写入 zkTLS provider 支持的 proof context 中。该 context 必须进入 provider 生成的 proof identifier、claim identifier 或等价可验证字段。
@@ -337,6 +344,25 @@ interface ZkTlsAdapter {
 
   normalizeReceipt(rawProof, context): Promise<DeliveryReceipt>;
 }
+
+Seller SDK `provenFetch` 调用约定：
+
+```ts
+interface ProvenFetchInput {
+  commitment: ExecutionCommitment;
+  callIndex: number;
+  request: ZkTlsRequestEvidence;
+  declaredModel: string;
+  taskNonce: Bytes32;
+  providerOptions?: Record<string, unknown>;
+}
+```
+
+其中：
+
+1. `providerOptions` 是可选扩展槽，保持向后兼容。
+2. Seller SDK 只负责透传 `providerOptions` 给 adapter，不负责解析其 provider 语义。
+3. adapter 不得要求 Buyer SDK、Contracts 或 Verifier 理解 `providerOptions`。
 
 8.4 TLS / zkTLS 防重放机制：Phase 1 方案 A
 

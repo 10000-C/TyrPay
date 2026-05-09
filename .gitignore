@@ -9,3 +9,6 @@ cache/
 typechain-types/
 deployments/
 .test-dist/
+
+# Ignore environment files 
+.env
