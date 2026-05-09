@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(corepack pnpm --filter @fulfillpay/seller-sdk build 2>&1)",
+      "PowerShell(corepack pnpm --filter @fulfillpay/seller-skill typecheck 2>&1)"
+    ]
+  }
+}

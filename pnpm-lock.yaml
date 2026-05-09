@@ -47,6 +47,25 @@ importers:
         specifier: ^22.15.30
         version: 22.19.17
 
+  packages/agent-kit:
+    dependencies:
+      '@fulfillpay/buyer-sdk':
+        specifier: workspace:*
+        version: link:../buyer-sdk
+      '@fulfillpay/buyer-skill':
+        specifier: workspace:*
+        version: link:../buyer-skill
+      '@fulfillpay/seller-sdk':
+        specifier: workspace:*
+        version: link:../seller-sdk
+      '@fulfillpay/seller-skill':
+        specifier: workspace:*
+        version: link:../seller-skill
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.19.17
+
   packages/buyer-sdk:
     dependencies:
       '@fulfillpay/sdk-core':
@@ -58,6 +77,23 @@ importers:
       ethers:
         specifier: ^6.16.0
         version: 6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.19.17
+
+  packages/buyer-skill:
+    dependencies:
+      '@fulfillpay/buyer-sdk':
+        specifier: workspace:*
+        version: link:../buyer-sdk
+      '@fulfillpay/sdk-core':
+        specifier: workspace:*
+        version: link:../sdk-core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.19.17
 
   packages/contracts:
     devDependencies:
@@ -137,6 +173,19 @@ importers:
       ethers:
         specifier: ^6.16.0
         version: 6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.19.17
+
+  packages/seller-skill:
+    dependencies:
+      '@fulfillpay/sdk-core':
+        specifier: workspace:*
+        version: link:../sdk-core
+      '@fulfillpay/seller-sdk':
+        specifier: workspace:*
+        version: link:../seller-sdk
     devDependencies:
       '@types/node':
         specifier: ^22.15.30
