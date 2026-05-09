@@ -46,7 +46,7 @@ dotenv.config();
 
 const DEFAULT_AMOUNT = 1_000_000n;
 const DEFAULT_MINT_AMOUNT = 10_000_000n;
-const DEFAULT_MIN_TOKENS = 100;
+const DEFAULT_MIN_TOKENS = 1;
 const DEFAULT_COMPLETIONS_PATH = "/chat/completions";
 
 type TxRecord = {
@@ -84,6 +84,7 @@ async function main() {
     }
 
     const modelConfig = resolveModelConfig();
+    const minTotalTokens = resolveMinTotalTokens();
     const useTee = resolveReclaimUseTee();
     const settlement = FulfillPaySettlement__factory.connect(settlementAddress, buyerWallet);
     const settlementAsOwner = settlement.connect(ownerWallet);
@@ -190,7 +191,8 @@ async function main() {
         verifier: verifierWallet.address,
         host: modelConfig.host,
         path: modelConfig.path,
-        model: modelConfig.model
+        model: modelConfig.model,
+        minTotalTokens
       });
       const commitmentPointer = await storage.putObject(commitment, { namespace: "commitments" });
       pushPointer(uris, "commitment", commitmentPointer);
@@ -210,7 +212,7 @@ async function main() {
           acceptedMethods: ["POST"],
           acceptedModels: [modelConfig.model],
           expectedVerifier: verifierWallet.address,
-          minTotalTokens: DEFAULT_MIN_TOKENS,
+          minTotalTokens,
           requireNonZeroMinUsage: true
         }
       });
@@ -270,7 +272,11 @@ async function main() {
 
       stage = "verify-task";
       const verificationResult = await callVerifier(verifierBaseUrl, created.taskId);
-      assert.equal(verificationResult.report.passed, true);
+      assert.equal(
+        verificationResult.report.passed,
+        true,
+        `Verifier rejected proof bundle with checks: ${JSON.stringify(verificationResult.report.checks)}`
+      );
       assert.equal(verificationResult.report.settlement.action, "RELEASE");
       pushPointer(uris, "verification report", verificationResult.reportPointer);
 
@@ -357,6 +363,20 @@ function resolveModelConfig(): { host: string; path: string; model: string } {
     path: normalizedPath,
     model: requireEnv("MODEL_NAME")
   };
+}
+
+function resolveMinTotalTokens(): number {
+  const raw = process.env.MODEL_MIN_TOTAL_TOKENS?.trim();
+  if (!raw) {
+    return DEFAULT_MIN_TOKENS;
+  }
+
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`MODEL_MIN_TOTAL_TOKENS must be a non-negative safe integer, received: ${raw}`);
+  }
+
+  return value;
 }
 
 function normalizeModelPath(basePathname: string): string {
@@ -465,6 +485,7 @@ function buildCommitment(input: {
   host: string;
   path: string;
   model: string;
+  minTotalTokens: number;
 }): ExecutionCommitment {
   return {
     schemaVersion: SCHEMA_VERSIONS.executionCommitment,
@@ -478,7 +499,7 @@ function buildCommitment(input: {
     },
     allowedModels: [input.model],
     minUsage: {
-      totalTokens: DEFAULT_MIN_TOKENS
+      totalTokens: input.minTotalTokens
     },
     deadline: input.deadlineMs.toString(),
     verifier: normalizeAddress(input.verifier, "verifier")
