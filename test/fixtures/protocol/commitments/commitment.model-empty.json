@@ -1,0 +1,26 @@
+{
+  "name": "commitment.model-empty",
+  "objectType": "ExecutionCommitment",
+  "object": {
+    "schemaVersion": "fulfillpay.execution-commitment.v1",
+    "taskId": "0x5555555555555555555555555555555555555555555555555555555555555555",
+    "buyer": "0x1111111111111111111111111111111111111111",
+    "seller": "0x2222222222222222222222222222222222222222",
+    "target": {
+      "host": "api.openai.com",
+      "path": "/v1/chat/completions",
+      "method": "POST"
+    },
+    "allowedModels": [],
+    "minUsage": {
+      "totalTokens": 120
+    },
+    "deadline": "1735689600000",
+    "verifier": "0x7777777777777777777777777777777777777777",
+    "termsHash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "termsURI": "ipfs://fulfillpay/terms/basic"
+  },
+  "canonical": "{\"allowedModels\":[],\"buyer\":\"0x1111111111111111111111111111111111111111\",\"deadline\":\"1735689600000\",\"minUsage\":{\"totalTokens\":120},\"schemaVersion\":\"fulfillpay.execution-commitment.v1\",\"seller\":\"0x2222222222222222222222222222222222222222\",\"target\":{\"host\":\"api.openai.com\",\"method\":\"POST\",\"path\":\"/v1/chat/completions\"},\"taskId\":\"0x5555555555555555555555555555555555555555555555555555555555555555\",\"termsHash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"termsURI\":\"ipfs://fulfillpay/terms/basic\",\"verifier\":\"0x7777777777777777777777777777777777777777\"}",
+  "hash": null,
+  "notes": "SCHEMA-INVALID: allowedModels is empty. assertExecutionCommitment rejects this object (minLength: 1 enforced). Used to verify that the buyer-sdk and verifier both reject commitments with no allowed models."
+}

@@ -531,3 +531,68 @@ describe("FulfillPaySettlement", function () {
     expect(await task.mockToken.balanceOf(task.buyer.address)).to.equal(10_000_000n);
   });
 });
+
+describe("VerifierRegistry", function () {
+  it("allows owner to add a verifier and emits VerifierAdded", async function () {
+    const fixture = await loadFixture(deployFixture);
+    const newVerifier = fixture.outsider.address;
+
+    await expect(
+      fixture.verifierRegistry.connect(fixture.owner).addVerifier(newVerifier)
+    )
+      .to.emit(fixture.verifierRegistry, "VerifierAdded")
+      .withArgs(newVerifier);
+
+    expect(await fixture.verifierRegistry.isVerifier(newVerifier)).to.equal(true);
+  });
+
+  it("allows owner to remove a verifier and emits VerifierRemoved", async function () {
+    const fixture = await loadFixture(deployFixture);
+
+    await expect(
+      fixture.verifierRegistry.connect(fixture.owner).removeVerifier(fixture.verifier.address)
+    )
+      .to.emit(fixture.verifierRegistry, "VerifierRemoved")
+      .withArgs(fixture.verifier.address);
+
+    expect(await fixture.verifierRegistry.isVerifier(fixture.verifier.address)).to.equal(false);
+  });
+
+  it("reverts when a non-owner attempts to add a verifier", async function () {
+    const fixture = await loadFixture(deployFixture);
+
+    await expect(
+      fixture.verifierRegistry.connect(fixture.outsider).addVerifier(fixture.outsider.address)
+    ).to.be.revertedWith("Ownable: caller is not the owner");
+  });
+
+  it("reverts when a non-owner attempts to remove a verifier", async function () {
+    const fixture = await loadFixture(deployFixture);
+
+    await expect(
+      fixture.verifierRegistry.connect(fixture.outsider).removeVerifier(fixture.verifier.address)
+    ).to.be.revertedWith("Ownable: caller is not the owner");
+  });
+
+  it("reverts with ZeroAddress when adding the zero address as a verifier", async function () {
+    const fixture = await loadFixture(deployFixture);
+
+    await expect(
+      fixture.verifierRegistry.connect(fixture.owner).addVerifier(ethers.ZeroAddress)
+    ).to.be.revertedWithCustomError(fixture.verifierRegistry, "ZeroAddress");
+  });
+
+  it("reverts with ZeroAddress when removing the zero address", async function () {
+    const fixture = await loadFixture(deployFixture);
+
+    await expect(
+      fixture.verifierRegistry.connect(fixture.owner).removeVerifier(ethers.ZeroAddress)
+    ).to.be.revertedWithCustomError(fixture.verifierRegistry, "ZeroAddress");
+  });
+
+  it("isVerifier returns false for an address that was never added", async function () {
+    const fixture = await loadFixture(deployFixture);
+
+    expect(await fixture.verifierRegistry.isVerifier(fixture.outsider.address)).to.equal(false);
+  });
+});
