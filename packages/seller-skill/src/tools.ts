@@ -3,12 +3,12 @@ import {
   normalizeAddress,
   normalizeBytes32,
   normalizeUIntString,
-  type ExecutionCommitment,
   type DeliveryReceipt,
+  type ExecutionCommitment,
   type UnixMillis
 } from "@tyrpay/sdk-core";
-import type { SellerAgent, ContractLike } from "@tyrpay/seller-sdk";
-import type { SellerTool, SellerSkillConfig, ReadableContractLike } from "./types.js";
+import type { ContractLike, SellerAgent } from "@tyrpay/seller-sdk";
+import type { ReadableContractLike, SellerSkillConfig, SellerTool } from "./types.js";
 
 const ZERO_HASH = "0x" + "0".repeat(64);
 const TASK_STATUS_NAMES = [
@@ -19,6 +19,46 @@ const TASK_STATUS_NAMES = [
   "SETTLED",
   "REFUNDED"
 ] as const;
+
+function mapSellerUserStatus(status: string) {
+  switch (status) {
+    case "INTENT_CREATED":
+      return {
+        userStatus: "READY_TO_ACCEPT",
+        userMessage: "The buyer created the task. Accept it to submit your execution terms."
+      };
+    case "COMMITMENT_SUBMITTED":
+      return {
+        userStatus: "WAITING_FOR_BUYER_FUNDING",
+        userMessage: "Your execution terms were submitted. Waiting for the buyer to approve and lock payment."
+      };
+    case "FUNDED":
+      return {
+        userStatus: "READY_TO_EXECUTE",
+        userMessage: "Payment is locked. You can execute the task and produce proof."
+      };
+    case "PROOF_SUBMITTED":
+      return {
+        userStatus: "AWAITING_VERIFICATION",
+        userMessage: "Proof was submitted. Waiting for final verification and payout."
+      };
+    case "SETTLED":
+      return {
+        userStatus: "PAID",
+        userMessage: "The task was verified and payment was released to the seller."
+      };
+    case "REFUNDED":
+      return {
+        userStatus: "NOT_PAID_REFUNDED",
+        userMessage: "The task ended in a refund to the buyer, so no seller payout was made."
+      };
+    default:
+      return {
+        userStatus: "UNKNOWN",
+        userMessage: "Task status is unknown. Inspect the raw task fields for more detail."
+      };
+  }
+}
 
 export function createSellerTools(config: SellerSkillConfig): SellerTool[] {
   const { agent, contract, verifier } = config;
@@ -34,10 +74,9 @@ function acceptTaskTool(agent: SellerAgent, contract: ReadableContractLike, veri
   return {
     name: "tyrpay_accept_task",
     description:
-      "Accept a TyrPay task as a seller: build the execution commitment, upload it to storage, and submit it on-chain. " +
-      "Call this after the buyer shares a taskId and you have agreed to perform the task. " +
-      "The commitment declares which API endpoint, allowed models, and minimum token delivery you commit to. " +
-      "Once submitted, the buyer will validate and fund the task.",
+      "Accept a TyrPay task as a seller: build the execution terms, upload them to storage, and submit them on-chain. " +
+      "Use this after the buyer shares a taskId and you agree to perform the task. " +
+      "Returns the commitment plus seller-facing status fields so the next step is clear.",
     inputSchema: {
       type: "object",
       required: ["taskId", "host", "path", "method", "allowedModels", "minTotalTokens", "deadline"],
@@ -104,7 +143,9 @@ function acceptTaskTool(agent: SellerAgent, contract: ReadableContractLike, veri
         taskId: result.taskId,
         commitmentHash: result.commitmentHash,
         commitmentURI: result.commitmentURI,
-        commitment
+        commitment,
+        userStatus: "WAITING_FOR_BUYER_FUNDING",
+        userMessage: "Execution terms were submitted. Wait for the buyer to approve and lock payment."
       };
     }
   };
@@ -115,9 +156,8 @@ function executeTaskTool(agent: SellerAgent): SellerTool {
     name: "tyrpay_execute_task",
     description:
       "Execute a funded TyrPay task via a zkTLS-proven API call. " +
-      "Performs the AI inference request with cryptographic proof, then uploads the proof and delivery receipt to storage. " +
-      "Returns the receipt object needed for tyrpay_submit_proof. " +
-      "Call this once per API call declared in your commitment — the task must be in FUNDED status.",
+      "Performs the upstream request with cryptographic proof, then uploads the proof and delivery receipt to storage. " +
+      "Returns the receipt object needed for tyrpay_submit_proof.",
     inputSchema: {
       type: "object",
       required: ["commitment", "taskNonce", "callIndex", "request", "declaredModel"],
@@ -137,7 +177,7 @@ function executeTaskTool(agent: SellerAgent): SellerTool {
         request: {
           type: "object",
           required: ["host", "path", "method"],
-          description: "The API request to execute — host/path/method must match your commitment target",
+          description: "The API request to execute. host/path/method must match your commitment target.",
           properties: {
             host: { type: "string" },
             path: { type: "string" },
@@ -149,7 +189,7 @@ function executeTaskTool(agent: SellerAgent): SellerTool {
         },
         declaredModel: {
           type: "string",
-          description: "The AI model name to use — must be in commitment.allowedModels"
+          description: "The AI model name to use. It must be included in commitment.allowedModels."
         },
         providerOptions: {
           type: "object",
@@ -188,7 +228,9 @@ function executeTaskTool(agent: SellerAgent): SellerTool {
         receiptURI: result.receiptPointer.uri,
         receiptHash: result.receiptPointer.hash,
         rawProofURI: result.rawProofPointer.uri,
-        rawProofHash: result.rawProofPointer.hash
+        rawProofHash: result.rawProofPointer.hash,
+        userStatus: "PROOF_CAPTURED",
+        userMessage: "Execution proof was captured. Submit proof to move the task into verification."
       };
     }
   };
@@ -199,8 +241,7 @@ function submitProofTool(agent: SellerAgent, contract: ReadableContractLike): Se
     name: "tyrpay_submit_proof",
     description:
       "Assemble all delivery receipts into a proof bundle, upload it to storage, and submit the proof bundle hash on-chain. " +
-      "Call this after all tyrpay_execute_task calls are complete to claim payment. " +
-      "Transitions the task to PROOF_SUBMITTED — the verifier then settles and releases payment to the seller.",
+      "Use this after all required execution calls are complete to move the task into final verification.",
     inputSchema: {
       type: "object",
       required: ["commitment", "receipts"],
@@ -211,7 +252,7 @@ function submitProofTool(agent: SellerAgent, contract: ReadableContractLike): Se
         },
         receipts: {
           type: "array",
-          description: "Array of receipt objects returned by tyrpay_execute_task — one per API call",
+          description: "Array of receipt objects returned by tyrpay_execute_task, one per API call",
           items: { type: "object" },
           minItems: 1
         }
@@ -232,7 +273,9 @@ function submitProofTool(agent: SellerAgent, contract: ReadableContractLike): Se
         txHash: result.txHash,
         taskId: result.taskId,
         proofBundleHash: result.proofBundleHash,
-        proofBundleURI: result.proofBundleURI
+        proofBundleURI: result.proofBundleURI,
+        userStatus: "AWAITING_VERIFICATION",
+        userMessage: "Proof was submitted. Wait for verification to release payment."
       };
     }
   };
@@ -243,8 +286,7 @@ function checkSettlementTool(contract: ReadableContractLike): SellerTool {
     name: "tyrpay_check_settlement",
     description:
       "Check whether a TyrPay task has been settled and payment released to the seller. " +
-      "Call this after tyrpay_submit_proof to track when the verifier settles the task. " +
-      "Returns settlement timestamp, report hash, and current task status.",
+      "Returns both raw protocol status and seller-facing status fields so agents can explain payout progress clearly.",
     inputSchema: {
       type: "object",
       required: ["taskId"],
@@ -269,7 +311,8 @@ function checkSettlementTool(contract: ReadableContractLike): SellerTool {
         proofBundleURI: task.proofBundleURI || null,
         settledAt: task.settledAtMs > 0n ? task.settledAtMs.toString() : null,
         refundedAt: task.refundedAtMs > 0n ? task.refundedAtMs.toString() : null,
-        reportHash: task.reportHash !== ZERO_HASH ? task.reportHash : null
+        reportHash: task.reportHash !== ZERO_HASH ? task.reportHash : null,
+        ...mapSellerUserStatus(status)
       };
     }
   };

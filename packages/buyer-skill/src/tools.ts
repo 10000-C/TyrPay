@@ -8,6 +8,55 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function mapBuyerUserStatus(task: { status?: string }, derivedStatus: string) {
+  if (derivedStatus === "EXPIRED") {
+    return {
+      userStatus: "EXPIRED",
+      userMessage: "The task expired before funding. No payment was locked."
+    };
+  }
+
+  if (task.status === "SETTLED") {
+    return {
+      userStatus: "COMPLETED",
+      userMessage: "The task was verified and payment was released to the seller."
+    };
+  }
+
+  if (task.status === "REFUNDED") {
+    return {
+      userStatus: "REFUNDED",
+      userMessage: "The task ended with a refund to the buyer."
+    };
+  }
+
+  if (task.status === "PROOF_SUBMITTED") {
+    return {
+      userStatus: "AWAITING_VERIFICATION",
+      userMessage: "The seller submitted proof. Verification is still pending."
+    };
+  }
+
+  if (derivedStatus === "EXECUTING" || task.status === "FUNDED") {
+    return {
+      userStatus: "IN_PROGRESS",
+      userMessage: "Payment is locked and the seller is executing the task."
+    };
+  }
+
+  if (task.status === "COMMITMENT_SUBMITTED") {
+    return {
+      userStatus: "READY_TO_FUND",
+      userMessage: "The seller responded with execution terms. Review and fund if acceptable."
+    };
+  }
+
+  return {
+    userStatus: "WAITING_FOR_SELLER",
+    userMessage: "The task was created and is waiting for the seller to respond."
+  };
+}
+
 export function createBuyerTools(sdk: BuyerSdk): BuyerTool[] {
   return [
     postTaskTool(sdk),
@@ -21,10 +70,10 @@ function postTaskTool(sdk: BuyerSdk): BuyerTool {
   return {
     name: "tyrpay_post_task",
     description:
-      "Post a TyrPay task and complete the full buyer flow automatically: " +
-      "create the task on-chain, wait for the seller to submit their commitment, validate it, then fund the task. " +
-      "This is the primary buyer tool — call it once with business parameters; it handles all on-chain steps internally. " +
-      "Returns the taskId and funding confirmation when the task is ready for the seller to execute.",
+      "Post a TyrPay task and complete the buyer setup flow automatically: " +
+      "create the task, wait for the seller to respond with execution terms, validate those terms, then lock payment. " +
+      "Use this when the buyer is ready to start a task and wants a funded task that the seller can execute. " +
+      "Returns the taskId together with buyer-facing status fields when the task is ready for execution.",
     inputSchema: {
       type: "object",
       required: ["seller", "token", "amount", "deadline"],
@@ -37,7 +86,8 @@ function postTaskTool(sdk: BuyerSdk): BuyerTool {
         metadataURI: { type: "string", description: "Optional URI pointing to task metadata" },
         expectations: {
           type: "object",
-          description: "Optional commitment validation constraints — if the seller's commitment violates any, the tool throws",
+          description:
+            "Optional commitment validation constraints. If the seller responds with terms outside these constraints, the tool throws.",
           properties: {
             acceptedHosts: { type: "array", items: { type: "string" }, description: "Allowed API hosts" },
             acceptedPaths: { type: "array", items: { type: "string" }, description: "Allowed API paths" },
@@ -51,11 +101,11 @@ function postTaskTool(sdk: BuyerSdk): BuyerTool {
         },
         pollIntervalMs: {
           type: "number",
-          description: `Polling interval while waiting for seller commitment in ms (default ${DEFAULT_POLL_INTERVAL_MS})`
+          description: `Polling interval while waiting for the seller response in ms (default ${DEFAULT_POLL_INTERVAL_MS})`
         },
         timeoutMs: {
           type: "number",
-          description: `Max ms to wait for seller commitment before giving up (default ${DEFAULT_TIMEOUT_MS})`
+          description: `Max ms to wait for the seller response before giving up (default ${DEFAULT_TIMEOUT_MS})`
         }
       },
       additionalProperties: false
@@ -85,17 +135,17 @@ function postTaskTool(sdk: BuyerSdk): BuyerTool {
 
       const pollInterval = i.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
       const totalTimeout = i.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-      const deadline = Date.now() + totalTimeout;
+      const waitDeadline = Date.now() + totalTimeout;
 
       while (true) {
         const task = await sdk.getTask(taskId);
         if (task.commitmentHash) break;
 
-        const remaining = deadline - Date.now();
+        const remaining = waitDeadline - Date.now();
         if (remaining <= pollInterval) {
           throw new Error(
-            `Timed out after ${totalTimeout}ms waiting for seller commitment on task ${taskId}. ` +
-            "Call tyrpay_check_task to monitor status."
+            `Timed out after ${totalTimeout}ms waiting for the seller to respond on task ${taskId}. ` +
+              "The task was created, but no payment was locked. Call tyrpay_check_task to monitor or decide whether to retry later."
           );
         }
         await sleep(pollInterval);
@@ -110,7 +160,9 @@ function postTaskTool(sdk: BuyerSdk): BuyerTool {
         createTxHash: created.receipt.hash,
         fundTxHash: fundReceipt.hash,
         commitmentHash: validated.commitmentHash,
-        commitmentURI: validated.commitmentURI
+        commitmentURI: validated.commitmentURI,
+        userStatus: "IN_PROGRESS",
+        userMessage: "Payment is locked and the seller can now execute the task."
       };
     }
   };
@@ -121,8 +173,7 @@ function checkTaskTool(sdk: BuyerSdk): BuyerTool {
     name: "tyrpay_check_task",
     description:
       "Check the current status and details of a TyrPay task. " +
-      "Status progresses: INTENT_CREATED → COMMITMENT_SUBMITTED → FUNDED → PROOF_SUBMITTED → SETTLED (or REFUNDED). " +
-      "derivedStatus adds EXPIRED (deadline passed without funding) and EXECUTING (funded, seller running).",
+      "Returns both the raw protocol status and buyer-facing status fields so an agent can explain progress without exposing protocol terms directly.",
     inputSchema: {
       type: "object",
       required: ["taskId"],
@@ -133,11 +184,8 @@ function checkTaskTool(sdk: BuyerSdk): BuyerTool {
     },
     async execute(input: unknown) {
       const i = input as { taskId: string };
-      const [task, derivedStatus] = await Promise.all([
-        sdk.getTask(i.taskId),
-        sdk.getTaskStatus(i.taskId)
-      ]);
-      return { ...task, derivedStatus };
+      const [task, derivedStatus] = await Promise.all([sdk.getTask(i.taskId), sdk.getTaskStatus(i.taskId)]);
+      return { ...task, derivedStatus, ...mapBuyerUserStatus(task, derivedStatus) };
     }
   };
 }
@@ -146,9 +194,9 @@ function refundTaskTool(sdk: BuyerSdk): BuyerTool {
   return {
     name: "tyrpay_refund_task",
     description:
-      "Request a refund for a funded TyrPay task after the seller or verifier missed a deadline. " +
-      "Use reason='proof_submission_deadline' if the seller never submitted proof within the grace period. " +
-      "Use reason='verification_timeout' if the verifier never settled within the verification timeout.",
+      "Request a refund for a funded TyrPay task after the workflow stalled. " +
+      "Use reason='proof_submission_deadline' when the seller did not submit proof in time. " +
+      "Use reason='verification_timeout' when proof was submitted but final verification did not finish in time.",
     inputSchema: {
       type: "object",
       required: ["taskId", "reason"],
@@ -158,8 +206,8 @@ function refundTaskTool(sdk: BuyerSdk): BuyerTool {
           type: "string",
           enum: ["proof_submission_deadline", "verification_timeout"],
           description:
-            "'proof_submission_deadline' — seller missed proof grace period; " +
-            "'verification_timeout' — verifier missed settlement timeout"
+            "'proof_submission_deadline' = seller did not submit proof before the proof deadline; " +
+            "'verification_timeout' = proof was submitted but final verification did not finish before timeout"
         }
       },
       additionalProperties: false
@@ -170,7 +218,11 @@ function refundTaskTool(sdk: BuyerSdk): BuyerTool {
         i.reason === "proof_submission_deadline"
           ? await sdk.refundAfterProofSubmissionDeadline(i.taskId)
           : await sdk.refundAfterVerificationTimeout(i.taskId);
-      return { txHash: receipt.hash };
+      return {
+        txHash: receipt.hash,
+        userStatus: "REFUND_IN_PROGRESS",
+        userMessage: "A refund transaction was sent. Check the task again to confirm that funds returned to the buyer."
+      };
     }
   };
 }
@@ -181,7 +233,7 @@ function listTasksTool(sdk: BuyerSdk): BuyerTool {
     description:
       "Check the status of multiple TyrPay task IDs in a single call. " +
       "Use this to monitor all active tasks at once instead of calling tyrpay_check_task one by one. " +
-      "Results are returned in the same order as the input taskIds.",
+      "Each result includes both the raw protocol status and buyer-facing status fields.",
     inputSchema: {
       type: "object",
       required: ["taskIds"],
@@ -200,11 +252,8 @@ function listTasksTool(sdk: BuyerSdk): BuyerTool {
       const i = input as { taskIds: string[] };
       return Promise.all(
         i.taskIds.map(async (taskId) => {
-          const [task, derivedStatus] = await Promise.all([
-            sdk.getTask(taskId),
-            sdk.getTaskStatus(taskId)
-          ]);
-          return { ...task, derivedStatus };
+          const [task, derivedStatus] = await Promise.all([sdk.getTask(taskId), sdk.getTaskStatus(taskId)]);
+          return { ...task, derivedStatus, ...mapBuyerUserStatus(task, derivedStatus) };
         })
       );
     }
