@@ -1,11 +1,13 @@
 import "@nomicfoundation/hardhat-toolbox";
 import * as dotenv from "dotenv";
+import path from "node:path";
 import { HardhatUserConfig } from "hardhat/config";
 
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 dotenv.config();
 
-const rpcUrl = process.env.RPC_URL;
-const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY;
+const rpcUrl = process.env.RPC_URL ?? process.env.ZERO_G_EVM_RPC;
+const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY ?? process.env.CONTRACT_OWNER_PRIVATE_KEY;
 
 const config: HardhatUserConfig = {
   solidity: {

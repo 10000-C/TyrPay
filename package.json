@@ -8,6 +8,8 @@
     "contracts:compile": "corepack pnpm --filter @fulfillpay/contracts compile",
     "contracts:deploy:local": "corepack pnpm --filter @fulfillpay/contracts deploy:local",
     "contracts:deploy:testnet": "corepack pnpm --filter @fulfillpay/contracts deploy:testnet",
+    "contracts:e2e:mock:testnet": "corepack pnpm --filter @fulfillpay/contracts e2e:mock:testnet",
+    "contracts:e2e:mock:boundaries:testnet": "corepack pnpm --filter @fulfillpay/contracts e2e:mock:boundaries:testnet",
     "contracts:node": "corepack pnpm --filter @fulfillpay/contracts node",
     "contracts:test": "corepack pnpm --filter @fulfillpay/contracts test",
     "contracts:typecheck": "corepack pnpm --filter @fulfillpay/contracts typecheck",

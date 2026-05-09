@@ -39,6 +39,7 @@ export interface ProvenMockCallResult {
   rawProof: MockRawProof;
   rawProofPointer: StoragePointer;
   receipt: DeliveryReceipt;
+  receiptPointer: StoragePointer;
 }
 
 export interface BuildProofBundleInput {
@@ -100,12 +101,14 @@ export async function provenFetch(input: ProvenMockCallInput): Promise<ProvenMoc
     callIntentHash,
     rawProofURI: rawProofPointer.uri
   });
+  const receiptPointer = await input.storage.putObject(receipt, { namespace: "receipts" });
 
   return {
     callIntentHash,
     rawProof,
     rawProofPointer,
-    receipt
+    receipt,
+    receiptPointer
   };
 }
 

@@ -19,7 +19,7 @@ import {
   type URI,
   type UnixMillis
 } from "@fulfillpay/sdk-core";
-import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
+import { MemoryStorageAdapter, type StoragePointer } from "@fulfillpay/storage-adapter";
 import { BuyerSdk } from "@fulfillpay/buyer-sdk";
 import { SellerAgent } from "@fulfillpay/seller-sdk";
 import {
@@ -217,7 +217,9 @@ export interface SellerFetchInput {
 
 export interface SellerFetchOutput {
   receipt: DeliveryReceipt;
+  receiptPointer: StoragePointer;
   rawProof: unknown;
+  rawProofPointer: StoragePointer;
 }
 
 /**
@@ -291,8 +293,14 @@ export async function sellerProvenFetch(input: SellerFetchInput): Promise<Seller
     callIntentHash,
     rawProofURI: rawProofPointer.uri
   });
+  const receiptPointer = await env.storage.putObject(receipt, { namespace: "receipts" });
 
-  return { receipt, rawProof: provenFetchResult.rawProof };
+  return {
+    receipt,
+    receiptPointer,
+    rawProof: provenFetchResult.rawProof,
+    rawProofPointer
+  };
 }
 
 export interface SellerProofOutput {

@@ -20,7 +20,7 @@ import {
   type URI,
   type UnixMillis
 } from "@fulfillpay/sdk-core";
-import type { StorageAdapter } from "@fulfillpay/storage-adapter";
+import type { StorageAdapter, StoragePointer } from "@fulfillpay/storage-adapter";
 import type { ZkTlsAdapter, ZkTlsReceiptContext, ZkTlsRequestEvidence } from "@fulfillpay/zktls-adapter";
 
 import type {
@@ -54,8 +54,12 @@ export interface ProvenFetchInput {
 export interface ProvenFetchOutput {
   /** The delivery receipt constructed from the proven fetch */
   receipt: DeliveryReceipt;
+  /** Storage pointer for the persisted delivery receipt */
+  receiptPointer: StoragePointer;
   /** The raw proof from the zkTLS adapter */
   rawProof: unknown;
+  /** Storage pointer for the persisted raw proof */
+  rawProofPointer: StoragePointer;
 }
 
 /**
@@ -219,10 +223,15 @@ export class SellerAgent {
 
     // Normalize the raw proof into a DeliveryReceipt
     const receipt = await this.zkTlsAdapter.normalizeReceipt(result.rawProof, receiptContext);
+    const receiptPointer = await this.storageAdapter.putObject(receipt, {
+      namespace: "receipts"
+    });
 
     return {
       receipt,
-      rawProof: result.rawProof
+      receiptPointer,
+      rawProof: result.rawProof,
+      rawProofPointer
     };
   }
 
