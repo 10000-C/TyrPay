@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
-import { type Address, type Bytes32 } from "@fulfillpay/sdk-core";
-import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
-import { MockZkTlsAdapter } from "@fulfillpay/zktls-adapter";
+import { type Address, type Bytes32 } from "@tyrpay/sdk-core";
+import { MemoryStorageAdapter } from "@tyrpay/storage-adapter";
+import { MockZkTlsAdapter } from "@tyrpay/zktls-adapter";
 import {
   CentralizedVerifier,
   EthersSettlementTaskReader,
@@ -10,7 +10,7 @@ import {
   toSettlementReportStruct,
   type VerificationResult,
   type SettlementReportStruct
-} from "@fulfillpay/verifier-service";
+} from "@tyrpay/verifier-service";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { type Server } from "node:http";
 
@@ -45,8 +45,8 @@ export async function deployVerifierE2eFixture(): Promise<VerifierE2eEnvironment
   const verifierService = new CentralizedVerifier({
     settlement: settlementReader,
     storage: env.storage,
-    signer: env.verifier as unknown as import("@fulfillpay/verifier-service").VerificationReportSigner,
-    zktlsAdapters: [env.zkTlsAdapter as unknown as import("@fulfillpay/verifier-service").RawProofVerifier],
+    signer: env.verifier as unknown as import("@tyrpay/verifier-service").VerificationReportSigner,
+    zktlsAdapters: [env.zkTlsAdapter as unknown as import("@tyrpay/verifier-service").RawProofVerifier],
     consumptionRegistry,
     // Use EVM block time so the verifier's clock stays in sync with evm_increaseTime.
     clock: async () => {
@@ -116,7 +116,7 @@ export async function verifyAndSettle(input: {
   const reportStruct = toSettlementReportStruct(report);
   const signature = report.signature;
 
-  const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
+  const contract = await ethers.getContractAt("TyrPaySettlement", env.settlementAddress);
   await (await contract.settle(reportStruct, signature)).wait();
 
   return { result, report };

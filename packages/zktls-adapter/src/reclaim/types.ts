@@ -3,7 +3,7 @@ import type {
   ExtractedReceiptFields,
   TaskContext,
   UnixMillis
-} from "@fulfillpay/sdk-core";
+} from "@tyrpay/sdk-core";
 
 import type {
   ProviderProofContext,
@@ -12,7 +12,7 @@ import type {
 } from "../core/index.js";
 
 export const RECLAIM_ZKTLS_PROVIDER = "reclaim" as const;
-export const RECLAIM_RAW_PROOF_SCHEMA_VERSION = "fulfillpay.reclaim-zktls-proof.v1" as const;
+export const RECLAIM_RAW_PROOF_SCHEMA_VERSION = "TyrPay.reclaim-zktls-proof.v1" as const;
 
 export interface ReclaimZkFetchAdapterConfig {
   appId?: string;
@@ -107,7 +107,7 @@ export interface ReclaimRawProof extends ReclaimRawProofPayload {
 }
 
 export interface ReclaimProofContextBinding {
-  protocol: "FulfillPay";
+  protocol: "TyrPay";
   version: 1;
   provider: typeof RECLAIM_ZKTLS_PROVIDER;
   proofContextHash: Bytes32;

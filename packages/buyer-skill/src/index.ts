@@ -1,2 +1,2 @@
-export type { FulfillPayTool, BuyerTool } from "./types.js";
+export type { TyrPayTool, BuyerTool } from "./types.js";
 export { createBuyerTools } from "./tools.js";

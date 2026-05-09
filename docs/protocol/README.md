@@ -1,6 +1,6 @@
-# FulfillPay Protocol Specs
+# TyrPay Protocol Specs
 
-This directory defines the minimal Phase 1 protocol surface for FulfillPay.
+This directory defines the minimal Phase 1 protocol surface for TyrPay.
 It is normative for contracts, SDKs, verifier services, storage adapters, zkTLS
 adapters, fixtures, and E2E tests.
 

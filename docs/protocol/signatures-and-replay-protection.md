@@ -7,7 +7,7 @@ This document defines verifier signatures and replay protection bindings.
 Verifier reports MUST be signed using EIP-712.
 
 ```text
-name: "FulfillPay"
+name: "TyrPay"
 version: "1"
 chainId: <settlement chain id>
 verifyingContract: <settlement contract address>

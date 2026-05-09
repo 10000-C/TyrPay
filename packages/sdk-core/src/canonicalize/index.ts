@@ -62,7 +62,7 @@ function normalizeValue(input: unknown, path: string): CanonicalJsonValue {
 }
 
 function isProtocolSchemaObject(value: unknown): value is { schemaVersion: string } {
-  return isPlainObject(value) && typeof value.schemaVersion === "string" && value.schemaVersion.startsWith("fulfillpay.");
+  return isPlainObject(value) && typeof value.schemaVersion === "string" && value.schemaVersion.startsWith("TyrPay.");
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

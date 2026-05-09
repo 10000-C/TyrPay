@@ -1,4 +1,4 @@
-import type { BuyerSdk, CommitmentExpectations } from "@fulfillpay/buyer-sdk";
+import type { BuyerSdk, CommitmentExpectations } from "@tyrpay/buyer-sdk";
 import type { BuyerTool } from "./types.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
@@ -19,9 +19,9 @@ export function createBuyerTools(sdk: BuyerSdk): BuyerTool[] {
 
 function postTaskTool(sdk: BuyerSdk): BuyerTool {
   return {
-    name: "fulfillpay_post_task",
+    name: "tyrpay_post_task",
     description:
-      "Post a FulfillPay task and complete the full buyer flow automatically: " +
+      "Post a TyrPay task and complete the full buyer flow automatically: " +
       "create the task on-chain, wait for the seller to submit their commitment, validate it, then fund the task. " +
       "This is the primary buyer tool — call it once with business parameters; it handles all on-chain steps internally. " +
       "Returns the taskId and funding confirmation when the task is ready for the seller to execute.",
@@ -95,7 +95,7 @@ function postTaskTool(sdk: BuyerSdk): BuyerTool {
         if (remaining <= pollInterval) {
           throw new Error(
             `Timed out after ${totalTimeout}ms waiting for seller commitment on task ${taskId}. ` +
-            "Call fulfillpay_check_task to monitor status."
+            "Call tyrpay_check_task to monitor status."
           );
         }
         await sleep(pollInterval);
@@ -118,9 +118,9 @@ function postTaskTool(sdk: BuyerSdk): BuyerTool {
 
 function checkTaskTool(sdk: BuyerSdk): BuyerTool {
   return {
-    name: "fulfillpay_check_task",
+    name: "tyrpay_check_task",
     description:
-      "Check the current status and details of a FulfillPay task. " +
+      "Check the current status and details of a TyrPay task. " +
       "Status progresses: INTENT_CREATED → COMMITMENT_SUBMITTED → FUNDED → PROOF_SUBMITTED → SETTLED (or REFUNDED). " +
       "derivedStatus adds EXPIRED (deadline passed without funding) and EXECUTING (funded, seller running).",
     inputSchema: {
@@ -144,9 +144,9 @@ function checkTaskTool(sdk: BuyerSdk): BuyerTool {
 
 function refundTaskTool(sdk: BuyerSdk): BuyerTool {
   return {
-    name: "fulfillpay_refund_task",
+    name: "tyrpay_refund_task",
     description:
-      "Request a refund for a funded FulfillPay task after the seller or verifier missed a deadline. " +
+      "Request a refund for a funded TyrPay task after the seller or verifier missed a deadline. " +
       "Use reason='proof_submission_deadline' if the seller never submitted proof within the grace period. " +
       "Use reason='verification_timeout' if the verifier never settled within the verification timeout.",
     inputSchema: {
@@ -177,10 +177,10 @@ function refundTaskTool(sdk: BuyerSdk): BuyerTool {
 
 function listTasksTool(sdk: BuyerSdk): BuyerTool {
   return {
-    name: "fulfillpay_list_tasks",
+    name: "tyrpay_list_tasks",
     description:
-      "Check the status of multiple FulfillPay task IDs in a single call. " +
-      "Use this to monitor all active tasks at once instead of calling fulfillpay_check_task one by one. " +
+      "Check the status of multiple TyrPay task IDs in a single call. " +
+      "Use this to monitor all active tasks at once instead of calling tyrpay_check_task one by one. " +
       "Results are returned in the same order as the input taskIds.",
     inputSchema: {
       type: "object",

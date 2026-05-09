@@ -20,7 +20,7 @@ async function main() {
   const verifierRegistry = await verifierRegistryFactory.deploy(deployer.address);
   await verifierRegistry.waitForDeployment();
 
-  const settlementFactory = await ethers.getContractFactory("FulfillPaySettlement");
+  const settlementFactory = await ethers.getContractFactory("TyrPaySettlement");
   const settlement = await settlementFactory.deploy(
     await verifierRegistry.getAddress(),
     DEFAULT_GRACE_PERIOD_MS,
@@ -33,7 +33,7 @@ async function main() {
   if (network.name === "hardhat" || network.name === "localhost") {
     const mockTokenFactory = await ethers.getContractFactory("MockERC20");
     const mockToken = await mockTokenFactory.deploy(
-      "FulfillPay Mock USD",
+      "TyrPay Mock USD",
       "fpUSD",
       deployer.address,
       1_000_000_000n

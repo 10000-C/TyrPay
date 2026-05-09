@@ -1,6 +1,6 @@
-import type { Bytes32, Address, UIntLike, URI, ProofBundle } from "@fulfillpay/sdk-core";
-import type { StorageAdapter, StoragePointer } from "@fulfillpay/storage-adapter";
-import type { ZkTlsAdapter } from "@fulfillpay/zktls-adapter";
+import type { Bytes32, Address, UIntLike, URI, ProofBundle } from "@tyrpay/sdk-core";
+import type { StorageAdapter, StoragePointer } from "@tyrpay/storage-adapter";
+import type { ZkTlsAdapter } from "@tyrpay/zktls-adapter";
 
 /**
  * Configuration for the Seller SDK / SellerAgent.
@@ -8,7 +8,7 @@ import type { ZkTlsAdapter } from "@fulfillpay/zktls-adapter";
 export interface SellerConfig {
   /** Ethers.js Signer for the seller's wallet (used for on-chain txs) */
   signer: Signer;
-  /** Address of the FulfillPaySettlement contract */
+  /** Address of the TyrPaySettlement contract */
   settlementContract: Address;
   /** Chain ID as a number or string */
   chainId: UIntLike;

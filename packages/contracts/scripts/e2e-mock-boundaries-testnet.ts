@@ -17,22 +17,22 @@ import {
   type ExecutionCommitment,
   type URI,
   type VerificationReport
-} from "@fulfillpay/sdk-core";
-import { BuyerSdk } from "@fulfillpay/buyer-sdk";
-import { SellerAgent } from "@fulfillpay/seller-sdk";
-import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
+} from "@tyrpay/sdk-core";
+import { BuyerSdk } from "@tyrpay/buyer-sdk";
+import { SellerAgent } from "@tyrpay/seller-sdk";
+import { MemoryStorageAdapter } from "@tyrpay/storage-adapter";
 import {
   CentralizedVerifier,
   EthersSettlementTaskReader,
   InMemoryProofConsumptionRegistry,
   createVerifierHttpServer,
   toSettlementReportStruct
-} from "@fulfillpay/verifier-service";
-import { MockZkTlsAdapter, type MockScenario, type MockTimeWindow } from "@fulfillpay/zktls-adapter";
+} from "@tyrpay/verifier-service";
+import { MockZkTlsAdapter, type MockScenario, type MockTimeWindow } from "@tyrpay/zktls-adapter";
 
 import {
-  FulfillPaySettlement,
-  FulfillPaySettlement__factory,
+  TyrPaySettlement,
+  TyrPaySettlement__factory,
   MockERC20,
   MockERC20__factory,
   VerifierRegistry,
@@ -107,7 +107,7 @@ interface LiveBoundaryEnvironment {
   verifierWallet: Wallet;
   strangerWallet: SigningWallet;
   verifierRegistry: VerifierRegistry;
-  settlement: FulfillPaySettlement;
+  settlement: TyrPaySettlement;
   mockToken: MockERC20;
   storage: MemoryStorageAdapter;
   zkTlsAdapter: MockZkTlsAdapter;
@@ -138,7 +138,7 @@ async function deployLiveBoundaryEnvironment(): Promise<LiveBoundaryEnvironment>
   await verifierRegistry.waitForDeployment();
   await (await verifierRegistry.addVerifier(verifierWallet.address)).wait();
 
-  const settlement = await new FulfillPaySettlement__factory(ownerWallet).deploy(
+  const settlement = await new TyrPaySettlement__factory(ownerWallet).deploy(
     await verifierRegistry.getAddress(),
     PROOF_SUBMISSION_GRACE_PERIOD_MS,
     VERIFICATION_TIMEOUT_MS
@@ -146,7 +146,7 @@ async function deployLiveBoundaryEnvironment(): Promise<LiveBoundaryEnvironment>
   await settlement.waitForDeployment();
 
   const mockToken = await new MockERC20__factory(ownerWallet).deploy(
-    "FulfillPay Boundary Mock USD",
+    "TyrPay Boundary Mock USD",
     "fpBUSD",
     ownerWallet.address,
     0n
@@ -167,7 +167,7 @@ async function deployLiveBoundaryEnvironment(): Promise<LiveBoundaryEnvironment>
   });
 
   const sellerAgent = new SellerAgent({
-    signer: sellerWallet as unknown as import("@fulfillpay/seller-sdk").Signer,
+    signer: sellerWallet as unknown as import("@tyrpay/seller-sdk").Signer,
     settlementContract: await settlement.getAddress() as Address,
     chainId: network.chainId.toString(),
     storageAdapter: storage,
@@ -181,7 +181,7 @@ async function deployLiveBoundaryEnvironment(): Promise<LiveBoundaryEnvironment>
       chainId: network.chainId
     }),
     storage,
-    signer: verifierWallet as unknown as import("@fulfillpay/verifier-service").VerificationReportSigner,
+    signer: verifierWallet as unknown as import("@tyrpay/verifier-service").VerificationReportSigner,
     zktlsAdapters: [zkTlsAdapter],
     consumptionRegistry: new InMemoryProofConsumptionRegistry(),
     clock: async () => {
@@ -280,7 +280,7 @@ async function caseLateProofWithinGrace(env: LiveBoundaryEnvironment) {
   await waitUntilOnChainMs(env.settlement, deadlineMs + 1_000n);
 
   await env.sellerAgent.submitProofBundleHash(
-    env.settlement.connect(env.sellerWallet) as unknown as import("@fulfillpay/seller-sdk").ContractLike,
+    env.settlement.connect(env.sellerWallet) as unknown as import("@tyrpay/seller-sdk").ContractLike,
     taskId as Bytes32,
     builtProof.proofBundleHash,
     builtProof.proofBundleURI
@@ -614,7 +614,7 @@ async function createCommittedTask(
 
   const pointer = await env.storage.putObject(commitment, { namespace: "commitments" });
   await env.sellerAgent.submitCommitment(
-    env.settlement.connect(env.sellerWallet) as unknown as import("@fulfillpay/seller-sdk").ContractLike,
+    env.settlement.connect(env.sellerWallet) as unknown as import("@tyrpay/seller-sdk").ContractLike,
     commitment,
     pointer.uri
   );
@@ -684,7 +684,7 @@ async function createProofSubmittedTask(
   });
 
   await env.sellerAgent.submitProofBundleHash(
-    env.settlement.connect(env.sellerWallet) as unknown as import("@fulfillpay/seller-sdk").ContractLike,
+    env.settlement.connect(env.sellerWallet) as unknown as import("@tyrpay/seller-sdk").ContractLike,
     funded.taskId as Bytes32,
     proof.proofBundleHash,
     proof.proofBundleURI
@@ -823,7 +823,7 @@ async function buildSignedSettlementReport(
 
   const signature = await signer.signTypedData(
     {
-      name: "FulfillPay",
+      name: "TyrPay",
       version: "1",
       chainId,
       verifyingContract
@@ -913,11 +913,11 @@ async function callVerifier(baseUrl: string, taskId: string) {
   };
 }
 
-async function defaultDeadlineMs(settlement: FulfillPaySettlement, offsetMs = 60_000n) {
+async function defaultDeadlineMs(settlement: TyrPaySettlement, offsetMs = 60_000n) {
   return BigInt(await settlement.currentTimeMs()) + offsetMs;
 }
 
-async function waitUntilOnChainMs(settlement: FulfillPaySettlement, targetMs: bigint) {
+async function waitUntilOnChainMs(settlement: TyrPaySettlement, targetMs: bigint) {
   for (;;) {
     const nowMs = BigInt(await settlement.currentTimeMs());
     if (nowMs >= targetMs) {

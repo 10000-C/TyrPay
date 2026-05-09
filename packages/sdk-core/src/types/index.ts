@@ -5,19 +5,19 @@ export type UIntString = string;
 export type UnixMillis = UIntString;
 export type URI = string;
 
-export const PROTOCOL_NAME = "FulfillPay" as const;
+export const PROTOCOL_NAME = "TyrPay" as const;
 export const PROTOCOL_VERSION = 1 as const;
-export const EIP712_DOMAIN_NAME = "FulfillPay" as const;
+export const EIP712_DOMAIN_NAME = "TyrPay" as const;
 export const EIP712_DOMAIN_VERSION = "1" as const;
 
 export const SCHEMA_VERSIONS = {
-  taskIntent: "fulfillpay.task-intent.v1",
-  taskContext: "fulfillpay.task-context.v1",
-  executionCommitment: "fulfillpay.execution-commitment.v1",
-  callIntent: "fulfillpay.call-intent.v1",
-  deliveryReceipt: "fulfillpay.delivery-receipt.v1",
-  proofBundle: "fulfillpay.proof-bundle.v1",
-  verificationReport: "fulfillpay.verification-report.v1"
+  taskIntent: "TyrPay.task-intent.v1",
+  taskContext: "TyrPay.task-context.v1",
+  executionCommitment: "TyrPay.execution-commitment.v1",
+  callIntent: "TyrPay.call-intent.v1",
+  deliveryReceipt: "TyrPay.delivery-receipt.v1",
+  proofBundle: "TyrPay.proof-bundle.v1",
+  verificationReport: "TyrPay.verification-report.v1"
 } as const;
 
 export type TaskStatus =

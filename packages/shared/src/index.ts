@@ -1,1 +1,1 @@
-export const protocolName = "FulfillPay";
+export const protocolName = "TyrPay";

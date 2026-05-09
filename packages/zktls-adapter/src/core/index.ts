@@ -10,7 +10,7 @@ import {
   type UIntLike,
   type URI,
   type UnixMillis
-} from "@fulfillpay/sdk-core";
+} from "@tyrpay/sdk-core";
 
 export interface ZkTlsRequestEvidence {
   host: string;

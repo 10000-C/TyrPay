@@ -17,9 +17,9 @@ import {
   type UIntLike,
   type UIntString,
   type VerificationReport
-} from "@fulfillpay/sdk-core";
+} from "@tyrpay/sdk-core";
 
-import { fulfillPaySettlementAbi } from "./abi.js";
+import { TyrPaySettlementAbi } from "./abi.js";
 import {
   BuyerSdkConfigurationError,
   BuyerSdkValidationError,
@@ -75,7 +75,7 @@ export class BuyerSdk {
       throw new BuyerSdkConfigurationError("BuyerSdk signer must be connected to a provider.");
     }
 
-    this.contract = new Contract(this.settlementAddress, fulfillPaySettlementAbi, config.signer);
+    this.contract = new Contract(this.settlementAddress, TyrPaySettlementAbi, config.signer);
   }
 
   async createTaskIntent(input: CreateTaskIntentInput): Promise<CreatedTaskIntent> {
@@ -237,7 +237,7 @@ export class BuyerSdk {
     return waitForReceipt(tx);
   }
 
-  async getTaskStatus(taskId: string): Promise<import("@fulfillpay/sdk-core").DerivedTaskStatus> {
+  async getTaskStatus(taskId: string): Promise<import("@tyrpay/sdk-core").DerivedTaskStatus> {
     const task = await this.getTask(taskId);
 
     if ((task.status === "INTENT_CREATED" || task.status === "COMMITMENT_SUBMITTED") && (await this.hasDeadlinePassed(task.deadline))) {

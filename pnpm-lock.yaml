@@ -30,13 +30,13 @@ importers:
 
   apps/verifier-service:
     dependencies:
-      '@fulfillpay/sdk-core':
+      '@tyrpay/sdk-core':
         specifier: workspace:*
         version: link:../../packages/sdk-core
-      '@fulfillpay/storage-adapter':
+      '@tyrpay/storage-adapter':
         specifier: workspace:*
         version: link:../../packages/storage-adapter
-      '@fulfillpay/zktls-adapter':
+      '@tyrpay/zktls-adapter':
         specifier: workspace:*
         version: link:../../packages/zktls-adapter
       ethers:
@@ -49,16 +49,16 @@ importers:
 
   packages/agent-kit:
     dependencies:
-      '@fulfillpay/buyer-sdk':
+      '@tyrpay/buyer-sdk':
         specifier: workspace:*
         version: link:../buyer-sdk
-      '@fulfillpay/buyer-skill':
+      '@tyrpay/buyer-skill':
         specifier: workspace:*
         version: link:../buyer-skill
-      '@fulfillpay/seller-sdk':
+      '@tyrpay/seller-sdk':
         specifier: workspace:*
         version: link:../seller-sdk
-      '@fulfillpay/seller-skill':
+      '@tyrpay/seller-skill':
         specifier: workspace:*
         version: link:../seller-skill
     devDependencies:
@@ -68,10 +68,10 @@ importers:
 
   packages/buyer-sdk:
     dependencies:
-      '@fulfillpay/sdk-core':
+      '@tyrpay/sdk-core':
         specifier: workspace:*
         version: link:../sdk-core
-      '@fulfillpay/storage-adapter':
+      '@tyrpay/storage-adapter':
         specifier: workspace:*
         version: link:../storage-adapter
       ethers:
@@ -84,10 +84,10 @@ importers:
 
   packages/buyer-skill:
     dependencies:
-      '@fulfillpay/buyer-sdk':
+      '@tyrpay/buyer-sdk':
         specifier: workspace:*
         version: link:../buyer-sdk
-      '@fulfillpay/sdk-core':
+      '@tyrpay/sdk-core':
         specifier: workspace:*
         version: link:../sdk-core
     devDependencies:
@@ -100,24 +100,6 @@ importers:
       '@0gfoundation/0g-storage-ts-sdk':
         specifier: ^1.2.9
         version: 1.2.9(bufferutil@4.1.0)(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)
-      '@fulfillpay/buyer-sdk':
-        specifier: workspace:*
-        version: link:../buyer-sdk
-      '@fulfillpay/sdk-core':
-        specifier: workspace:*
-        version: link:../sdk-core
-      '@fulfillpay/seller-sdk':
-        specifier: workspace:*
-        version: link:../seller-sdk
-      '@fulfillpay/storage-adapter':
-        specifier: workspace:*
-        version: link:../storage-adapter
-      '@fulfillpay/verifier-service':
-        specifier: workspace:*
-        version: link:../../apps/verifier-service
-      '@fulfillpay/zktls-adapter':
-        specifier: workspace:*
-        version: link:../zktls-adapter
       '@nomicfoundation/hardhat-toolbox':
         specifier: ^5.0.0
         version: 5.0.0(59638dbfe55ff956d8e9bf0f58725f5f)
@@ -130,6 +112,24 @@ importers:
       '@types/node':
         specifier: ^22.15.30
         version: 22.19.17
+      '@tyrpay/buyer-sdk':
+        specifier: workspace:*
+        version: link:../buyer-sdk
+      '@tyrpay/sdk-core':
+        specifier: workspace:*
+        version: link:../sdk-core
+      '@tyrpay/seller-sdk':
+        specifier: workspace:*
+        version: link:../seller-sdk
+      '@tyrpay/storage-adapter':
+        specifier: workspace:*
+        version: link:../storage-adapter
+      '@tyrpay/verifier-service':
+        specifier: workspace:*
+        version: link:../../apps/verifier-service
+      '@tyrpay/zktls-adapter':
+        specifier: workspace:*
+        version: link:../zktls-adapter
       chai:
         specifier: ^4.5.0
         version: 4.5.0
@@ -161,13 +161,13 @@ importers:
 
   packages/seller-sdk:
     dependencies:
-      '@fulfillpay/sdk-core':
+      '@tyrpay/sdk-core':
         specifier: workspace:*
         version: link:../sdk-core
-      '@fulfillpay/storage-adapter':
+      '@tyrpay/storage-adapter':
         specifier: workspace:*
         version: link:../storage-adapter
-      '@fulfillpay/zktls-adapter':
+      '@tyrpay/zktls-adapter':
         specifier: workspace:*
         version: link:../zktls-adapter
       ethers:
@@ -180,10 +180,10 @@ importers:
 
   packages/seller-skill:
     dependencies:
-      '@fulfillpay/sdk-core':
+      '@tyrpay/sdk-core':
         specifier: workspace:*
         version: link:../sdk-core
-      '@fulfillpay/seller-sdk':
+      '@tyrpay/seller-sdk':
         specifier: workspace:*
         version: link:../seller-sdk
     devDependencies:
@@ -198,7 +198,7 @@ importers:
       '@0gfoundation/0g-storage-ts-sdk':
         specifier: ^1.2.9
         version: 1.2.9(bufferutil@4.1.0)(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)
-      '@fulfillpay/sdk-core':
+      '@tyrpay/sdk-core':
         specifier: workspace:*
         version: link:../sdk-core
     devDependencies:
@@ -208,13 +208,13 @@ importers:
 
   packages/verifier-client:
     dependencies:
-      '@fulfillpay/sdk-core':
+      '@tyrpay/sdk-core':
         specifier: workspace:*
         version: link:../sdk-core
 
   packages/zktls-adapter:
     dependencies:
-      '@fulfillpay/sdk-core':
+      '@tyrpay/sdk-core':
         specifier: workspace:*
         version: link:../sdk-core
     devDependencies:

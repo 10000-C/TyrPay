@@ -27,7 +27,7 @@ import {
   type Bytes32,
   type ExecutionCommitment,
   type ProofBundle
-} from "@fulfillpay/sdk-core";
+} from "@tyrpay/sdk-core";
 
 import {
   deployVerifierE2eFixture,
@@ -49,8 +49,8 @@ import {
   INITIAL_BALANCE
 } from "./helpers/setup";
 
-import { toSettlementReportStruct } from "@fulfillpay/verifier-service";
-import { BuyerSdk } from "@fulfillpay/buyer-sdk";
+import { toSettlementReportStruct } from "@tyrpay/verifier-service";
+import { BuyerSdk } from "@tyrpay/buyer-sdk";
 
 // ─── Shared helper ───────────────────────────────────────────────────────────
 
@@ -132,7 +132,7 @@ async function manuallySettle(input: {
   const { report, signature } = await buildAndSignReport({
     env, taskId, commitmentHash, proofBundleHash, passed
   });
-  const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
+  const contract = await ethers.getContractAt("TyrPaySettlement", env.settlementAddress);
   await (await contract.settle(report, signature)).wait();
 }
 
@@ -188,7 +188,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
           token: await ethers.resolveAddress(env.mockToken),
           amount: DEFAULT_AMOUNT, deadline: deadlineMs
         });
-        const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
+        const contract = await ethers.getContractAt("TyrPaySettlement", env.settlementAddress);
         const fakeHash = "0x0000000000000000000000000000000000000000000000000000000000000001";
 
         await expect(
@@ -212,7 +212,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
         await env.buyerSdk.fundTask(created.taskId, {
           validateCommitment: { expectedVerifier: env.verifier.address }
         });
-        const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
+        const contract = await ethers.getContractAt("TyrPaySettlement", env.settlementAddress);
         const fakeHash = "0x0000000000000000000000000000000000000000000000000000000000000001";
 
         await expect(
@@ -234,7 +234,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
         };
 
         const fakeSignature = await env.stranger.signTypedData(
-          { name: "FulfillPay", version: "1", chainId: env.chainId, verifyingContract: env.settlementAddress },
+          { name: "TyrPay", version: "1", chainId: env.chainId, verifyingContract: env.settlementAddress },
           { VerificationReport: [
             { name: "taskId", type: "bytes32" }, { name: "buyer", type: "address" },
             { name: "seller", type: "address" }, { name: "commitmentHash", type: "bytes32" },
@@ -245,7 +245,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
           report
         );
 
-        const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
+        const contract = await ethers.getContractAt("TyrPaySettlement", env.settlementAddress);
         await expect(contract.settle(report, fakeSignature))
           .to.be.revertedWithCustomError(contract, "UnauthorizedVerifier");
       });
@@ -276,7 +276,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
           overrides: { allowedModels: ["other-model"] }
         });
         const pointer = await env.storage.putObject(commitment2, { namespace: "commitments" });
-        const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
+        const contract = await ethers.getContractAt("TyrPaySettlement", env.settlementAddress);
 
         await expect(
           contract.connect(env.seller).submitCommitment(created.taskId, pointer.hash, pointer.uri)
@@ -303,7 +303,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
         const { report: dupReport, signature: dupSig } = await buildAndSignReport({
           env, taskId, commitmentHash, proofBundleHash, passed: true
         });
-        const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
+        const contract = await ethers.getContractAt("TyrPaySettlement", env.settlementAddress);
         await expect(contract.settle(dupReport, dupSig))
           .to.be.revertedWithCustomError(contract, "InvalidTaskState");
       });
@@ -343,7 +343,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
           chainId: env.chainId, report: swappedReport
         });
 
-        const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
+        const contract = await ethers.getContractAt("TyrPaySettlement", env.settlementAddress);
         await expect(contract.settle(swappedReport, sig))
           .to.be.revertedWithCustomError(contract, "InvalidReportBinding");
       });
@@ -361,7 +361,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
         // Remove verifier AFTER signing but BEFORE settling
         await (await env.verifierRegistry.removeVerifier(env.verifier.address)).wait();
 
-        const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
+        const contract = await ethers.getContractAt("TyrPaySettlement", env.settlementAddress);
         await expect(contract.settle(report, signature))
           .to.be.revertedWithCustomError(contract, "UnauthorizedVerifier");
       });
@@ -479,7 +479,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
 
         await env.mockToken.connect(env.buyer).approve(env.settlementAddress, 0n);
 
-        const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
+        const contract = await ethers.getContractAt("TyrPaySettlement", env.settlementAddress);
         await expect(contract.connect(env.buyer).fundTask(created.taskId)).to.be.reverted;
       });
     });
@@ -529,7 +529,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
         const { taskId } = await setupTaskToProofSubmitted({ env });
 
         const response = await callVerifier(env.verifierBaseUrl, taskId);
-        const result = response.body as import("@fulfillpay/verifier-service").VerificationResult;
+        const result = response.body as import("@tyrpay/verifier-service").VerificationResult;
 
         const recomputedHash = hashVerificationReport({
           schemaVersion: result.report.schemaVersion,
@@ -566,7 +566,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
         const response = await callVerifier(env.verifierBaseUrl, taskId);
         expect(response.status).to.equal(200);
 
-        const result = response.body as import("@fulfillpay/verifier-service").VerificationResult;
+        const result = response.body as import("@tyrpay/verifier-service").VerificationResult;
         expect(result.report.passed, `Expected passed=true. checks=${JSON.stringify(result.checks)}`).to.equal(true);
         expect(result.checks.withinTaskWindow).to.equal(true);
         expect(result.checks.modelMatched).to.equal(true);
@@ -613,7 +613,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
 
         // Submit the SAME proofBundleHash with the CORRECT proofBundleURI
         const contract = (await ethers.getContractAt(
-          "FulfillPaySettlement", env.settlementAddress
+          "TyrPaySettlement", env.settlementAddress
         )).connect(env.seller);
         await (await contract.submitProofBundle(
           createdB.taskId,
@@ -656,7 +656,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
         const response = await callVerifier(env.verifierBaseUrl, taskId);
         expect(response.status).to.equal(200);
 
-        const result = response.body as import("@fulfillpay/verifier-service").VerificationResult;
+        const result = response.body as import("@tyrpay/verifier-service").VerificationResult;
         expect(
           result.checks.modelMatched,
           `Expected modelMatched=false but got ${result.checks.modelMatched}`
@@ -669,7 +669,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
         });
 
         const response = await callVerifier(env.verifierBaseUrl, taskId);
-        const result = response.body as import("@fulfillpay/verifier-service").VerificationResult;
+        const result = response.body as import("@tyrpay/verifier-service").VerificationResult;
 
         expect(result.report.passed).to.equal(false);
         expect(result.report.settlement.action).to.equal("REFUND");
@@ -714,7 +714,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
 
         const response = await callVerifier(env.verifierBaseUrl, taskId);
         expect(response.status).to.equal(200);
-        const result = response.body as import("@fulfillpay/verifier-service").VerificationResult;
+        const result = response.body as import("@tyrpay/verifier-service").VerificationResult;
 
         expect(
           result.checks.usageSatisfied,
@@ -739,7 +739,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
         };
 
         const fakeSignature = await env.stranger.signTypedData(
-          { name: "FulfillPay", version: "1", chainId: env.chainId, verifyingContract: env.settlementAddress },
+          { name: "TyrPay", version: "1", chainId: env.chainId, verifyingContract: env.settlementAddress },
           { VerificationReport: [
             { name: "taskId", type: "bytes32" }, { name: "buyer", type: "address" },
             { name: "seller", type: "address" }, { name: "commitmentHash", type: "bytes32" },
@@ -750,7 +750,7 @@ describe("E2E Red-Team: Cross-Component Boundary Tests", function () {
           report
         );
 
-        const contract = await ethers.getContractAt("FulfillPaySettlement", env.settlementAddress);
+        const contract = await ethers.getContractAt("TyrPaySettlement", env.settlementAddress);
         await expect(contract.settle(report, fakeSignature))
           .to.be.revertedWithCustomError(contract, "EmptyReportHash");
       });

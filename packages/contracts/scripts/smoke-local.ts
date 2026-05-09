@@ -4,8 +4,8 @@ import path from "node:path";
 import { ethers, network } from "hardhat";
 
 import {
-  FulfillPaySettlement,
-  FulfillPaySettlement__factory,
+  TyrPaySettlement,
+  TyrPaySettlement__factory,
   MockERC20,
   MockERC20__factory,
   VerifierRegistry,
@@ -47,7 +47,7 @@ async function main() {
   }
 
   const verifierRegistry = VerifierRegistry__factory.connect(deployments.verifierRegistry, owner) as VerifierRegistry;
-  const settlement = FulfillPaySettlement__factory.connect(deployments.settlement, owner) as FulfillPaySettlement;
+  const settlement = TyrPaySettlement__factory.connect(deployments.settlement, owner) as TyrPaySettlement;
   const mockToken = MockERC20__factory.connect(deployments.mockToken, owner) as MockERC20;
 
   const settlementAddress = await ethers.resolveAddress(settlement);
@@ -166,7 +166,7 @@ async function createFundedTask({
   tokenAddress,
   commitmentSalt = "smoke/default/commitment"
 }: {
-  settlement: FulfillPaySettlement;
+  settlement: TyrPaySettlement;
   buyer: Awaited<ReturnType<typeof ethers.getSigners>>[number];
   seller: Awaited<ReturnType<typeof ethers.getSigners>>[number];
   tokenAddress: string;
@@ -202,7 +202,7 @@ async function signReport(
 ) {
   return verifier.signTypedData(
     {
-      name: "FulfillPay",
+      name: "TyrPay",
       version: "1",
       chainId,
       verifyingContract: settlementAddress

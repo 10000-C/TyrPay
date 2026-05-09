@@ -2,7 +2,7 @@
   "name": "verification-report-pass-basic",
   "scenario": "EIP-712 digest for the unsigned passing verification report in the basic Phase 1 task.",
   "domain": {
-    "name": "FulfillPay",
+    "name": "TyrPay",
     "version": "1",
     "chainId": "31337",
     "verifyingContract": "0x4444444444444444444444444444444444444444"

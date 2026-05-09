@@ -17,15 +17,15 @@ import {
   type ExecutionCommitment,
   type ProofBundle,
   type VerificationReport
-} from "@fulfillpay/sdk-core";
-import { BuyerSdk } from "@fulfillpay/buyer-sdk";
-import { SellerAgent } from "@fulfillpay/seller-sdk";
+} from "@tyrpay/sdk-core";
+import { BuyerSdk } from "@tyrpay/buyer-sdk";
+import { SellerAgent } from "@tyrpay/seller-sdk";
 import {
   ZeroGStorageAdapter,
   createZeroGStorageTransport,
   type StorageAdapter,
   type StoragePointer
-} from "@fulfillpay/storage-adapter";
+} from "@tyrpay/storage-adapter";
 import {
   CentralizedVerifier,
   EthersSettlementTaskReader,
@@ -33,11 +33,11 @@ import {
   createVerifierHttpServer,
   toSettlementReportStruct,
   type VerificationResult
-} from "@fulfillpay/verifier-service";
-import { ReclaimZkTlsAdapter } from "@fulfillpay/zktls-adapter";
+} from "@tyrpay/verifier-service";
+import { ReclaimZkTlsAdapter } from "@tyrpay/zktls-adapter";
 
 import {
-  FulfillPaySettlement__factory,
+  TyrPaySettlement__factory,
   MockERC20__factory,
   VerifierRegistry__factory
 } from "../typechain-types";
@@ -105,7 +105,7 @@ async function main() {
     const modelConfig = resolveModelConfig();
     const minTotalTokens = resolveMinTotalTokens();
     const useTee = resolveReclaimUseTee();
-    const settlement = FulfillPaySettlement__factory.connect(settlementAddress, buyerWallet);
+    const settlement = TyrPaySettlement__factory.connect(settlementAddress, buyerWallet);
     const settlementAsOwner = settlement.connect(ownerWallet);
     const settlementAsSeller = settlement.connect(sellerWallet);
 
@@ -155,7 +155,7 @@ async function main() {
       storage
     });
     const sellerAgent = new SellerAgent({
-      signer: sellerWallet as unknown as import("@fulfillpay/seller-sdk").Signer,
+      signer: sellerWallet as unknown as import("@tyrpay/seller-sdk").Signer,
       settlementContract: settlementAddress,
       chainId: network.chainId.toString(),
       storageAdapter: storage,
@@ -170,7 +170,7 @@ async function main() {
       })
       ,
       storage,
-      signer: verifierWallet as unknown as import("@fulfillpay/verifier-service").VerificationReportSigner,
+      signer: verifierWallet as unknown as import("@tyrpay/verifier-service").VerificationReportSigner,
       zktlsAdapters: [zkTlsAdapter],
       consumptionRegistry: new InMemoryProofConsumptionRegistry(),
       clock: async () => {
@@ -237,7 +237,7 @@ async function main() {
         });
         const pointer = await storage.putObject(builtCommitment, { namespace: "commitments" });
         const result = await sellerAgent.submitCommitment(
-          settlementAsSeller as unknown as import("@fulfillpay/seller-sdk").ContractLike,
+          settlementAsSeller as unknown as import("@tyrpay/seller-sdk").ContractLike,
           builtCommitment,
           pointer.uri
         );
@@ -317,7 +317,7 @@ async function main() {
         });
         const upload = await sellerAgent.uploadProofBundle(builtProofBundle);
         const submitResult = await sellerAgent.submitProofBundleHash(
-          settlementAsSeller as unknown as import("@fulfillpay/seller-sdk").ContractLike,
+          settlementAsSeller as unknown as import("@tyrpay/seller-sdk").ContractLike,
           created.taskId as Bytes32,
           upload.pointer.hash as Bytes32,
           upload.pointer.uri
@@ -478,7 +478,7 @@ function resolveReclaimUseTee(): boolean {
 }
 
 async function ensureOwnerAccess(
-  settlement: ReturnType<typeof FulfillPaySettlement__factory.connect>,
+  settlement: ReturnType<typeof TyrPaySettlement__factory.connect>,
   verifierRegistry: ReturnType<typeof VerifierRegistry__factory.connect>,
   expectedOwner: string
 ) {
@@ -508,12 +508,12 @@ async function ensureVerifierAuthorized(
 }
 
 async function deployAndAllowMockToken(
-  settlement: ReturnType<typeof FulfillPaySettlement__factory.connect>,
+  settlement: ReturnType<typeof TyrPaySettlement__factory.connect>,
   ownerWallet: Wallet,
   txs: TxRecord[]
 ) {
   const deployTx = await new MockERC20__factory(ownerWallet).deploy(
-    "FulfillPay Reclaim Test USD",
+    "TyrPay Reclaim Test USD",
     "fpRTUSD",
     ownerWallet.address,
     0n

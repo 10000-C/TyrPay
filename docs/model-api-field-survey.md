@@ -8,7 +8,7 @@ This document summarizes the official request and response conventions for major
 model vendors and cloud vendors that expose text-generation or chat-generation
 APIs. The focus is narrow:
 
-1. Which endpoint family is relevant for FulfillPay-style proof collection
+1. Which endpoint family is relevant for TyrPay-style proof collection
 2. How to identify the invoked `model`
 3. How to identify `usage`
 4. Where to find stream termination markers such as `finish_reason`,
@@ -658,7 +658,7 @@ Streaming note:
 - For production proof extraction, use the exact Responses API object shape from
   the integrated endpoint and lock test vectors to that shape
 
-## Recommendations for FulfillPay
+## Recommendations for TyrPay
 
 ### Phase 1: non-streaming proof target
 

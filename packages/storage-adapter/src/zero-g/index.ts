@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { Indexer, MemData } from "@0gfoundation/0g-storage-ts-sdk";
-import type { Bytes32, URI } from "@fulfillpay/sdk-core";
+import type { Bytes32, URI } from "@tyrpay/sdk-core";
 
 import type { GetObjectOptions, PutObjectOptions, StorageAdapter, StoragePointer } from "../types.js";
 import { StorageConfigurationError, StorageNotFoundError } from "../types.js";
@@ -168,7 +168,7 @@ export function createZeroGStorageTransport(options: ZeroGStorageSdkTransportOpt
 
     async getObject(uri) {
       const { rootHash } = parseZeroGStorageUri(uri);
-      const downloadDirectory = await mkdtemp(path.join(tempDirectory, "fulfillpay-0g-"));
+      const downloadDirectory = await mkdtemp(path.join(tempDirectory, "TyrPay-0g-"));
       const targetPath = path.join(downloadDirectory, `${rootHash}.json`);
 
       try {

@@ -1,5 +1,5 @@
 {
-  "name": "@fulfillpay/verifier-service",
+  "name": "@tyrpay/verifier-service",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -12,9 +12,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@fulfillpay/sdk-core": "workspace:*",
-    "@fulfillpay/storage-adapter": "workspace:*",
-    "@fulfillpay/zktls-adapter": "workspace:*",
+    "@tyrpay/sdk-core": "workspace:*",
+    "@tyrpay/storage-adapter": "workspace:*",
+    "@tyrpay/zktls-adapter": "workspace:*",
     "ethers": "^6.16.0"
   },
   "devDependencies": {

@@ -1,17 +1,20 @@
 {
-  "name": "@fulfillpay/buyer-skill",
-  "private": true,
+  "name": "@tyrpay/buyer-skill",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@fulfillpay/buyer-sdk": "workspace:*",
-    "@fulfillpay/sdk-core": "workspace:*"
+    "@tyrpay/buyer-sdk": "workspace:*",
+    "@tyrpay/sdk-core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.15.30"

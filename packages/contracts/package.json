@@ -1,5 +1,5 @@
 {
-  "name": "@fulfillpay/contracts",
+  "name": "@tyrpay/contracts",
   "private": true,
   "version": "0.1.0",
   "scripts": {
@@ -23,12 +23,12 @@
   },
   "devDependencies": {
     "@0gfoundation/0g-storage-ts-sdk": "^1.2.9",
-    "@fulfillpay/buyer-sdk": "workspace:*",
-    "@fulfillpay/sdk-core": "workspace:*",
-    "@fulfillpay/seller-sdk": "workspace:*",
-    "@fulfillpay/storage-adapter": "workspace:*",
-    "@fulfillpay/verifier-service": "workspace:*",
-    "@fulfillpay/zktls-adapter": "workspace:*",
+    "@tyrpay/buyer-sdk": "workspace:*",
+    "@tyrpay/sdk-core": "workspace:*",
+    "@tyrpay/seller-sdk": "workspace:*",
+    "@tyrpay/storage-adapter": "workspace:*",
+    "@tyrpay/verifier-service": "workspace:*",
+    "@tyrpay/zktls-adapter": "workspace:*",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@openzeppelin/contracts": "^4.9.6",
     "@types/mocha": "^10.0.10",

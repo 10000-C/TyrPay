@@ -18,19 +18,19 @@ import {
   type UIntLike,
   type URI,
   type UnixMillis
-} from "@fulfillpay/sdk-core";
-import { MemoryStorageAdapter, type StoragePointer } from "@fulfillpay/storage-adapter";
-import { BuyerSdk } from "@fulfillpay/buyer-sdk";
-import { SellerAgent } from "@fulfillpay/seller-sdk";
+} from "@tyrpay/sdk-core";
+import { MemoryStorageAdapter, type StoragePointer } from "@tyrpay/storage-adapter";
+import { BuyerSdk } from "@tyrpay/buyer-sdk";
+import { SellerAgent } from "@tyrpay/seller-sdk";
 import {
   MockZkTlsAdapter,
   type MockScenario,
   type MockTimeWindow
-} from "@fulfillpay/zktls-adapter";
+} from "@tyrpay/zktls-adapter";
 
 import {
-  FulfillPaySettlement,
-  FulfillPaySettlement__factory,
+  TyrPaySettlement,
+  TyrPaySettlement__factory,
   MockERC20,
   MockERC20__factory,
   VerifierRegistry,
@@ -53,7 +53,7 @@ export interface E2eEnvironment {
   stranger: HardhatEthersSigner;
 
   verifierRegistry: VerifierRegistry;
-  settlement: FulfillPaySettlement;
+  settlement: TyrPaySettlement;
   settlementAddress: Address;
   mockToken: MockERC20;
   chainId: bigint;
@@ -74,7 +74,7 @@ export async function deployE2eFixture(): Promise<E2eEnvironment> {
   await (await verifierRegistry.addVerifier(verifier.address)).wait();
 
   const verifierRegistryAddress = await ethers.resolveAddress(verifierRegistry);
-  const settlement = await new FulfillPaySettlement__factory(owner).deploy(
+  const settlement = await new TyrPaySettlement__factory(owner).deploy(
     verifierRegistryAddress,
     GRACE_PERIOD_MS,
     VERIFICATION_TIMEOUT_MS
@@ -83,7 +83,7 @@ export async function deployE2eFixture(): Promise<E2eEnvironment> {
   const settlementAddress = await ethers.resolveAddress(settlement) as Address;
 
   const mockToken = await new MockERC20__factory(owner).deploy(
-    "FulfillPay Mock USD",
+    "TyrPay Mock USD",
     "fpUSD",
     owner.address,
     0
@@ -162,7 +162,7 @@ export async function submitCommitmentOnChain(input: {
   const pointer = await env.storage.putObject(commitment, { namespace: "commitments" });
 
   const contract = await ethers.getContractAt(
-    "FulfillPaySettlement",
+    "TyrPaySettlement",
     env.settlementAddress
   );
   await (await contract.connect(env.seller).submitCommitment(taskId, pointer.hash, pointer.uri)).wait();
@@ -177,7 +177,7 @@ export async function submitCommitmentOnChain(input: {
  * Mirrors seller-agent.ts computeCallIntentHash (which is private there).
  */
 function computeCallIntentHash(
-  taskContext: import("@fulfillpay/sdk-core").TaskContext,
+  taskContext: import("@tyrpay/sdk-core").TaskContext,
   callIndex: number,
   request: { host: string; path: string; method: string; body?: unknown },
   declaredModel: string
@@ -341,7 +341,7 @@ export async function sellerSubmitProof(input: {
 }): Promise<void> {
   const { env, commitment, proofBundleHash, proofBundleURI } = input;
   const contract = (await ethers.getContractAt(
-    "FulfillPaySettlement",
+    "TyrPaySettlement",
     env.settlementAddress
   )).connect(env.seller);
 
@@ -398,7 +398,7 @@ export async function signVerificationReport(input: {
 }): Promise<string> {
   return input.verifier.signTypedData(
     {
-      name: "FulfillPay",
+      name: "TyrPay",
       version: "1",
       chainId: input.chainId,
       verifyingContract: input.settlementAddress

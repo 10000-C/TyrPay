@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
-import { hashObject, type Bytes32 } from "@fulfillpay/sdk-core";
+import { hashObject, type Bytes32 } from "@tyrpay/sdk-core";
 
 import { normalizeRequestEvidence, type ProviderProofContext } from "../core/index.js";
 
@@ -181,7 +181,7 @@ export function hashReclaimProofContext(proofContext: ProviderProofContext): Byt
 
 export function buildReclaimProofContextBinding(proofContext: ProviderProofContext): ReclaimProofContextBinding {
   return {
-    protocol: "FulfillPay",
+    protocol: "TyrPay",
     version: 1,
     provider: RECLAIM_ZKTLS_PROVIDER,
     proofContextHash: hashReclaimProofContext(proofContext),

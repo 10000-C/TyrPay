@@ -1,13 +1,13 @@
-import type { SellerAgent, ContractLike } from "@fulfillpay/seller-sdk";
+import type { SellerAgent, ContractLike } from "@tyrpay/seller-sdk";
 
-export interface FulfillPayTool {
+export interface TyrPayTool {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: Record<string, unknown>;
   execute(input: unknown): Promise<unknown>;
 }
 
-export type SellerTool = FulfillPayTool;
+export type SellerTool = TyrPayTool;
 
 /** Raw task struct as returned by the settlement contract's getTask(). */
 export interface RawOnChainTask {

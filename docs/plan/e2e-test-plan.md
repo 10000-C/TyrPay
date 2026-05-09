@@ -22,7 +22,7 @@ Buyer 创建任务 → Seller 提交承诺 → Buyer 锁款 → Seller 执行 Mo
 
 | 层级 | 组件 | 说明 |
 |---|---|---|
-| 链上 | FulfillPaySettlement + VerifierRegistry + MockERC20 | Hardhat local node |
+| 链上 | TyrPaySettlement + VerifierRegistry + MockERC20 | Hardhat local node |
 | 链下 SDK | BuyerSdk + SellerAgent | 调用 SDK 方法驱动流程 |
 | 链下 Adapter | MemoryStorageAdapter + MockZkTlsAdapter | Mock 实现 |
 | 链下 Service | Verifier Service (HTTP) | 真实 Fastify 服务器，内存存储 |
@@ -78,7 +78,7 @@ Buyer 创建任务 → Seller 提交承诺 → Buyer 锁款 → Seller 执行 Mo
 ```typescript
 interface E2eEnvironment {
   // 合约实例
-  settlement: FulfillPaySettlement;
+  settlement: TyrPaySettlement;
   verifierRegistry: VerifierRegistry;
   mockToken: MockERC20;
   
@@ -418,10 +418,10 @@ test/
 // test/e2e/helpers/setup.ts
 
 import { ethers } from "hardhat";
-import { BuyerSdk } from "@fulfillpay/buyer-sdk";
-import { SellerAgent } from "@fulfillpay/seller-sdk";
-import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
-import { MockZkTlsAdapter } from "@fulfillpay/zktls-adapter";
+import { BuyerSdk } from "@tyrpay/buyer-sdk";
+import { SellerAgent } from "@tyrpay/seller-sdk";
+import { MemoryStorageAdapter } from "@tyrpay/storage-adapter";
+import { MockZkTlsAdapter } from "@tyrpay/zktls-adapter";
 
 export async function setupE2eEnvironment(): Promise<E2eEnvironment> {
   const [owner, buyer, seller, verifier, stranger] = await ethers.getSigners();

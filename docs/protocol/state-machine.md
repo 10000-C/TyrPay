@@ -1,6 +1,6 @@
 # Task State Machine
 
-This document defines the canonical FulfillPay Phase 1 task state machine.
+This document defines the canonical TyrPay Phase 1 task state machine.
 
 ## Design Choice
 

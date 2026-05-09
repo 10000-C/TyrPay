@@ -2,16 +2,16 @@
   "name": "proof-bundle.usage-insufficient",
   "objectType": "ProofBundle",
   "object": {
-    "schemaVersion": "fulfillpay.proof-bundle.v1",
+    "schemaVersion": "TyrPay.proof-bundle.v1",
     "taskId": "0x5555555555555555555555555555555555555555555555555555555555555555",
     "commitmentHash": "0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a",
     "seller": "0x2222222222222222222222222222222222222222",
     "receipts": [
       {
-        "schemaVersion": "fulfillpay.delivery-receipt.v1",
+        "schemaVersion": "TyrPay.delivery-receipt.v1",
         "taskContext": {
-          "schemaVersion": "fulfillpay.task-context.v1",
-          "protocol": "FulfillPay",
+          "schemaVersion": "TyrPay.task-context.v1",
+          "protocol": "TyrPay",
           "version": 1,
           "chainId": "31337",
           "settlementContract": "0x4444444444444444444444444444444444444444",
@@ -35,7 +35,7 @@
           }
         },
         "rawProofHash": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        "rawProofURI": "ipfs://fulfillpay/raw-proof/mock-proof-0001"
+        "rawProofURI": "ipfs://TyrPay/raw-proof/mock-proof-0001"
       }
     ],
     "aggregateUsage": {

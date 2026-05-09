@@ -32,15 +32,15 @@ import {
   type UnixMillis,
   type UnsignedVerificationReport,
   type VerificationReport
-} from "@fulfillpay/sdk-core";
-import { StorageIntegrityError, type StorageAdapter, type StoragePointer } from "@fulfillpay/storage-adapter";
+} from "@tyrpay/sdk-core";
+import { StorageIntegrityError, type StorageAdapter, type StoragePointer } from "@tyrpay/storage-adapter";
 import {
   hashRequestEvidence,
   hashResponseEvidence,
   type ProviderProofContext,
   type ZkTlsRequestEvidence,
   type ZkTlsResponseEvidence
-} from "@fulfillpay/zktls-adapter";
+} from "@tyrpay/zktls-adapter";
 import { Contract, type ContractRunner } from "ethers";
 
 export const REQUIRED_VERIFICATION_CHECKS = [
@@ -1004,7 +1004,7 @@ function toProofConsumptionKey(entry: { keyType: ProofConsumptionKeyType; key: s
 function buildExpectedTaskContext(inputs: VerificationInputs): TaskContext {
   return {
     schemaVersion: SCHEMA_VERSIONS.taskContext,
-    protocol: "FulfillPay",
+    protocol: "TyrPay",
     version: 1,
     chainId: inputs.chainId,
     settlementContract: inputs.settlementContract,

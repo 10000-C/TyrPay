@@ -2,7 +2,7 @@
   "name": "verification-report.wrong-chain.unsigned",
   "objectType": "VerificationReportUnsigned",
   "object": {
-    "schemaVersion": "fulfillpay.verification-report.v1",
+    "schemaVersion": "TyrPay.verification-report.v1",
     "chainId": "1",
     "settlementContract": "0x4444444444444444444444444444444444444444",
     "taskId": "0x5555555555555555555555555555555555555555555555555555555555555555",

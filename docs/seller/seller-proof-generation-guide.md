@@ -26,9 +26,9 @@ Before calling the SDK, the seller must already have:
 ### 1. `SellerAgent` config
 
 ```ts
-import { SellerAgent } from "@fulfillpay/seller-sdk";
-import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
-import { ReclaimZkTlsAdapter } from "@fulfillpay/zktls-adapter";
+import { SellerAgent } from "@tyrpay/seller-sdk";
+import { MemoryStorageAdapter } from "@tyrpay/storage-adapter";
+import { ReclaimZkTlsAdapter } from "@tyrpay/zktls-adapter";
 
 const agent = new SellerAgent({
   signer,
@@ -46,7 +46,7 @@ const agent = new SellerAgent({
 Required fields:
 
 - `signer`: seller wallet signer
-- `settlementContract`: FulfillPay settlement contract address
+- `settlementContract`: TyrPay settlement contract address
 - `chainId`: target chain id
 - `storageAdapter`: where raw proofs, receipts, and bundles are stored
 - `zkTlsAdapter`: proof provider implementation, for example `ReclaimZkTlsAdapter`
@@ -106,7 +106,7 @@ Optional field:
 
 `agent.provenFetch()` returns:
 
-- `rawProof`: provider-native proof wrapped in FulfillPay envelope
+- `rawProof`: provider-native proof wrapped in TyrPay envelope
 - `rawProofPointer`: storage pointer for the raw proof
 - `receipt`: normalized `DeliveryReceipt`
 - `receiptPointer`: storage pointer for the receipt

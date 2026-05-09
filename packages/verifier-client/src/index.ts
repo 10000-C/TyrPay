@@ -1,4 +1,4 @@
-import type { AggregateUsage, Bytes32, URI, VerificationReport } from "@fulfillpay/sdk-core";
+import type { AggregateUsage, Bytes32, URI, VerificationReport } from "@tyrpay/sdk-core";
 
 export interface VerifierClientOptions {
   baseUrl: string;

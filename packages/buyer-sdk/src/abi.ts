@@ -1,4 +1,4 @@
-export const fulfillPaySettlementAbi = [
+export const TyrPaySettlementAbi = [
   "event TaskIntentCreated(bytes32 indexed taskId, bytes32 indexed taskNonce, address indexed buyer, address seller, address token, uint256 amount, uint256 deadlineMs, bytes32 metadataHash, string metadataURI)",
   "function createTaskIntent(address seller,address token,uint256 amount,uint256 deadlineMs,bytes32 metadataHash,string metadataURI) returns (bytes32 taskId, bytes32 taskNonce)",
   "function fundTask(bytes32 taskId)",

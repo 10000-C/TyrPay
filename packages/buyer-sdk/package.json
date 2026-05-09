@@ -1,18 +1,21 @@
 {
-  "name": "@fulfillpay/buyer-sdk",
-  "private": true,
+  "name": "@tyrpay/buyer-sdk",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "corepack pnpm run build && cd ../contracts && corepack pnpm exec hardhat run scripts/run-buyer-sdk-integration.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@fulfillpay/sdk-core": "workspace:*",
-    "@fulfillpay/storage-adapter": "workspace:*",
+    "@tyrpay/sdk-core": "workspace:*",
+    "@tyrpay/storage-adapter": "workspace:*",
     "ethers": "^6.16.0"
   },
   "devDependencies": {

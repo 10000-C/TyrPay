@@ -1,7 +1,7 @@
 # M1–M7 合规审计报告
 
 > 审计日期：2026-05-04  
-> 范围：对照 `docs/plan/FulfillPay_dev_plan.md` 与 `docs/protocol/*.md` 规范，逐模块审查 M1–M7 实现的合规性、缺失与偏差。
+> 范围：对照 `docs/plan/tyrpay_dev_plan.md` 与 `docs/protocol/*.md` 规范，逐模块审查 M1–M7 实现的合规性、缺失与偏差。
 
 ---
 
@@ -51,16 +51,16 @@
 
 ### M1 — Contracts
 
-**规范要求**：FulfillPaySettlement、VerifierRegistry、MockERC20、Hardhat tests、deploy scripts。
+**规范要求**：TyrPaySettlement、VerifierRegistry、MockERC20、Hardhat tests、deploy scripts。
 
 #### ✅ 已完成
 
 | 项目 | 状态 | 说明 |
 |---|---|---|
-| FulfillPaySettlement.sol | ✅ | 含 createTaskIntent、submitCommitment、fundTask、submitProofBundle、settle、refund 等核心函数 |
+| TyrPaySettlement.sol | ✅ | 含 createTaskIntent、submitCommitment、fundTask、submitProofBundle、settle、refund 等核心函数 |
 | VerifierRegistry.sol | ✅ | 含 addVerifier、removeVerifier、isVerifier |
 | MockERC20.sol | ✅ | 含 mint、approve、transfer |
-| Hardhat tests | ✅ | `test/fulfillpay-settlement.test.ts` 覆盖主要状态转换 |
+| Hardhat tests | ✅ | `test/TyrPay-settlement.test.ts` 覆盖主要状态转换 |
 | Deploy scripts | ✅ | `scripts/deploy.ts` 存在 |
 | EIP-712 签名验证 | ✅ | 继承 OpenZeppelin EIP712，使用 ECDSA.recover |
 | 状态机转换保护 | ✅ | 各函数有 require 校验前置状态 |

@@ -1,5 +1,5 @@
 {
-  "name": "@fulfillpay/verifier-client",
+  "name": "@tyrpay/verifier-client",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -11,6 +11,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@fulfillpay/sdk-core": "workspace:*"
+    "@tyrpay/sdk-core": "workspace:*"
   }
 }

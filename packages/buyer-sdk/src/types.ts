@@ -12,8 +12,8 @@ import type {
   URI,
   UnixMillis,
   VerificationReport
-} from "@fulfillpay/sdk-core";
-import type { StorageAdapter } from "@fulfillpay/storage-adapter";
+} from "@tyrpay/sdk-core";
+import type { StorageAdapter } from "@tyrpay/storage-adapter";
 
 export interface CreateTaskIntentInput {
   seller: string;

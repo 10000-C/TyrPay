@@ -12,28 +12,28 @@ putObject(value, options) -> { uri, hash }
 getObject(pointerOrUri, options) -> value
 ```
 
-`hash` MUST be the FulfillPay canonical object hash defined in
+`hash` MUST be the TyrPay canonical object hash defined in
 [canonicalization-and-hashing.md](./canonicalization-and-hashing.md). Storage
-provider identifiers MUST NOT replace the FulfillPay object hash.
+provider identifiers MUST NOT replace the TyrPay object hash.
 
 Storage adapters MUST:
 
 | Requirement | Rule |
 |---|---|
 | Canonical payload | Store the canonical JSON payload produced by SDK Core. |
-| Hash integrity | Recompute the FulfillPay object hash after download before returning an object. |
+| Hash integrity | Recompute the TyrPay object hash after download before returning an object. |
 | URI persistence | Return a URI that contains enough provider metadata to retrieve the object later. |
 | Error boundary | Normalize missing objects to `StorageNotFoundError` and hash mismatches to `StorageIntegrityError`. |
 
 ## 0G Storage URI
 
-0G Storage uses a provider `rootHash` for retrieval. FulfillPay still uses its
+0G Storage uses a provider `rootHash` for retrieval. TyrPay still uses its
 own canonical object hash for protocol integrity and chain commitments.
 
 The Phase 1 URI format is:
 
 ```text
-0g://storage/<namespace>/<fulfillpayObjectHash>.json?root=<zeroGRootHash>&tx=<optionalUploadTxHash>
+0g://storage/<namespace>/<TyrPayObjectHash>.json?root=<zeroGRootHash>&tx=<optionalUploadTxHash>
 ```
 
 Rules:
@@ -41,24 +41,24 @@ Rules:
 | Field | Requirement |
 |---|---|
 | `namespace` | MUST follow storage adapter namespace rules. |
-| `fulfillpayObjectHash` | MUST be the canonical FulfillPay object hash. |
+| `TyrPayObjectHash` | MUST be the canonical TyrPay object hash. |
 | `root` | MUST be the 0G Storage root hash returned by the official SDK upload. |
 | `tx` | MAY contain the 0G upload transaction hash for diagnostics and indexing. |
 
-Verifier and SDK code MUST verify storage objects against the FulfillPay hash.
+Verifier and SDK code MUST verify storage objects against the TyrPay hash.
 They MUST NOT verify fulfillment against the 0G root hash alone.
 
 ## 0G SDK Integration
 
-The `@fulfillpay/storage-adapter` package uses the official
+The `@tyrpay/storage-adapter` package uses the official
 `@0gfoundation/0g-storage-ts-sdk` package for the SDK-backed 0G transport. The
 official SDK flow is:
 
 1. Build an `Indexer` from the 0G Storage indexer RPC URL.
 2. Upload canonical JSON as `MemData` through `indexer.upload(...)`.
-3. Persist the returned `rootHash` in the FulfillPay storage URI.
+3. Persist the returned `rootHash` in the TyrPay storage URI.
 4. Download by `rootHash` through `indexer.download(...)`.
-5. Recompute the FulfillPay canonical object hash before returning data.
+5. Recompute the TyrPay canonical object hash before returning data.
 
 Official references:
 
@@ -78,7 +78,7 @@ Example:
 
 ```ts
 import { Indexer } from "@0gfoundation/0g-storage-ts-sdk";
-import { ZeroGStorageAdapter, createZeroGStorageTransport } from "@fulfillpay/storage-adapter";
+import { ZeroGStorageAdapter, createZeroGStorageTransport } from "@tyrpay/storage-adapter";
 import { JsonRpcProvider, Wallet } from "ethers";
 
 const provider = new JsonRpcProvider(process.env.ZERO_G_EVM_RPC);

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Implement `ReclaimZkTlsAdapter` as a drop-in `ZkTlsAdapter` for Seller SDK. The adapter must keep FulfillPay protocol objects stable and expose Reclaim proofs through the same `DeliveryReceipt` and raw proof flow used by the mock adapter.
+Implement `ReclaimZkTlsAdapter` as a drop-in `ZkTlsAdapter` for Seller SDK. The adapter must keep TyrPay protocol objects stable and expose Reclaim proofs through the same `DeliveryReceipt` and raw proof flow used by the mock adapter.
 
 ## Interface
 
@@ -49,11 +49,11 @@ interface ReclaimZkFetchAdapterConfig {
 
 ## Raw Proof Envelope
 
-Reclaim native proof is wrapped in a FulfillPay envelope:
+Reclaim native proof is wrapped in a TyrPay envelope:
 
 ```ts
 interface ReclaimRawProof {
-  proofSchemaVersion: "fulfillpay.reclaim-zktls-proof.v1";
+  proofSchemaVersion: "TyrPay.reclaim-zktls-proof.v1";
   provider: "reclaim";
   providerProofId: string;
   proofContext: ProviderProofContext;

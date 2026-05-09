@@ -9,7 +9,7 @@ import {
   type TaskContext,
   type UIntLike,
   type UnixMillis
-} from "@fulfillpay/sdk-core";
+} from "@tyrpay/sdk-core";
 
 import {
   assertReceiptContextMatchesProofContext,
@@ -28,7 +28,7 @@ import {
 } from "../core/index.js";
 
 export const MOCK_ZKTLS_PROVIDER = "mock" as const;
-export const MOCK_RAW_PROOF_SCHEMA_VERSION = "fulfillpay.mock-zktls-proof.v1" as const;
+export const MOCK_RAW_PROOF_SCHEMA_VERSION = "TyrPay.mock-zktls-proof.v1" as const;
 export const DEFAULT_MOCK_OBSERVED_AT = "1735686000000" as const;
 const DEFAULT_TOTAL_TOKENS = 128;
 
@@ -311,7 +311,7 @@ function assertMockRawProof(rawProof: MockRawProof): void {
 
 function assertMockRawProofPayload(payload: MockRawProofPayload): void {
   if (payload.proofSchemaVersion !== MOCK_RAW_PROOF_SCHEMA_VERSION) {
-    throw new TypeError("proofSchemaVersion must be fulfillpay.mock-zktls-proof.v1.");
+    throw new TypeError("proofSchemaVersion must be TyrPay.mock-zktls-proof.v1.");
   }
 
   if (payload.provider !== MOCK_ZKTLS_PROVIDER) {

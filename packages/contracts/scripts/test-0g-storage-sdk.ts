@@ -34,7 +34,7 @@ async function main() {
   }
 
   const indexer = new Indexer(indexerRpc);
-  const tempDirectory = await mkdtemp(path.join(tmpdir(), "fulfillpay-0g-sdk-"));
+  const tempDirectory = await mkdtemp(path.join(tmpdir(), "TyrPay-0g-sdk-"));
 
   try {
     console.log(`Testing official 0G SDK on chain ${network.chainId.toString()}.`);
@@ -88,7 +88,7 @@ async function runWalletCase(
 function buildPayload(label: WalletCase["label"], signerAddress: string): string {
   return JSON.stringify(
     {
-      kind: "fulfillpay-0g-sdk-smoke",
+      kind: "TyrPay-0g-sdk-smoke",
       wallet: label,
       signer: signerAddress,
       timestamp: new Date().toISOString()

@@ -18,20 +18,20 @@ import {
   type ProofBundle,
   type URI,
   type VerificationReport
-} from "@fulfillpay/sdk-core";
-import { BuyerSdk } from "@fulfillpay/buyer-sdk";
-import { SellerAgent } from "@fulfillpay/seller-sdk";
+} from "@tyrpay/sdk-core";
+import { BuyerSdk } from "@tyrpay/buyer-sdk";
+import { SellerAgent } from "@tyrpay/seller-sdk";
 import {
   CentralizedVerifier,
   EthersSettlementTaskReader,
   InMemoryProofConsumptionRegistry,
   createVerifierHttpServer,
   toSettlementReportStruct
-} from "@fulfillpay/verifier-service";
-import { MockZkTlsAdapter } from "@fulfillpay/zktls-adapter";
+} from "@tyrpay/verifier-service";
+import { MockZkTlsAdapter } from "@tyrpay/zktls-adapter";
 
 import {
-  FulfillPaySettlement__factory,
+  TyrPaySettlement__factory,
   MockERC20__factory,
   VerifierRegistry__factory
 } from "../typechain-types";
@@ -39,7 +39,7 @@ import {
   ZeroGStorageAdapter,
   createZeroGStorageTransport,
   type StorageAdapter
-} from "@fulfillpay/storage-adapter";
+} from "@tyrpay/storage-adapter";
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 dotenv.config();
@@ -66,7 +66,7 @@ async function main() {
     throw new Error(`CHAIN_ID=${envChainId} does not match provider chainId=${network.chainId.toString()}.`);
   }
 
-  const settlement = FulfillPaySettlement__factory.connect(settlementAddress, buyerWallet);
+  const settlement = TyrPaySettlement__factory.connect(settlementAddress, buyerWallet);
   const settlementAsOwner = settlement.connect(ownerWallet);
   const settlementAsSeller = settlement.connect(sellerWallet);
 
@@ -94,7 +94,7 @@ async function main() {
     storage
   });
   const sellerAgent = new SellerAgent({
-    signer: sellerWallet as unknown as import("@fulfillpay/seller-sdk").Signer,
+    signer: sellerWallet as unknown as import("@tyrpay/seller-sdk").Signer,
     settlementContract: settlementAddress,
     chainId: network.chainId.toString(),
     storageAdapter: storage,
@@ -108,7 +108,7 @@ async function main() {
       chainId: network.chainId
     }),
     storage,
-    signer: verifierWallet as unknown as import("@fulfillpay/verifier-service").VerificationReportSigner,
+    signer: verifierWallet as unknown as import("@tyrpay/verifier-service").VerificationReportSigner,
     zktlsAdapters: [zkTlsAdapter],
     consumptionRegistry: new InMemoryProofConsumptionRegistry(),
     clock: async () => {
@@ -157,7 +157,7 @@ async function main() {
     });
     const commitmentPointer = await storage.putObject(commitment, { namespace: "commitments" });
     await sellerAgent.submitCommitment(
-      settlementAsSeller as unknown as import("@fulfillpay/seller-sdk").ContractLike,
+      settlementAsSeller as unknown as import("@tyrpay/seller-sdk").ContractLike,
       commitment,
       commitmentPointer.uri
     );
@@ -191,7 +191,7 @@ async function main() {
       observedAt: await settlement.currentTimeMs()
     });
     await sellerAgent.submitProofBundleHash(
-      settlementAsSeller as unknown as import("@fulfillpay/seller-sdk").ContractLike,
+      settlementAsSeller as unknown as import("@tyrpay/seller-sdk").ContractLike,
       created.taskId as Bytes32,
       proofOutput.proofBundleHash,
       proofOutput.proofBundleUri
@@ -281,7 +281,7 @@ function buildWalletFromEnv(name: string, rpcUrl: string) {
   return new Wallet(normalizePrivateKey(requireEnv(name)), new JsonRpcProvider(rpcUrl));
 }
 
-async function ensureOwnerAccess(settlement: ReturnType<typeof FulfillPaySettlement__factory.connect>, verifierRegistry: ReturnType<typeof VerifierRegistry__factory.connect>, expectedOwner: string) {
+async function ensureOwnerAccess(settlement: ReturnType<typeof TyrPaySettlement__factory.connect>, verifierRegistry: ReturnType<typeof VerifierRegistry__factory.connect>, expectedOwner: string) {
   const settlementOwner = normalizeAddress(await settlement.owner(), "settlement.owner");
   const registryOwner = normalizeAddress(await verifierRegistry.owner(), "verifierRegistry.owner");
   const normalizedExpectedOwner = normalizeAddress(expectedOwner, "CONTRACT_OWNER_PRIVATE_KEY");
@@ -301,11 +301,11 @@ async function ensureVerifierAuthorized(verifierRegistry: ReturnType<typeof Veri
 }
 
 async function deployAndAllowMockToken(
-  settlement: ReturnType<typeof FulfillPaySettlement__factory.connect>,
+  settlement: ReturnType<typeof TyrPaySettlement__factory.connect>,
   ownerWallet: Wallet
 ) {
   const mockToken = await new MockERC20__factory(ownerWallet).deploy(
-    "FulfillPay Mock USD",
+    "TyrPay Mock USD",
     "fpUSD",
     ownerWallet.address,
     0n

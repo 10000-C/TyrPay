@@ -10,15 +10,15 @@ import {
   type ProofBundle,
   type TaskContext,
   type UnixMillis
-} from "@fulfillpay/sdk-core";
-import type { StorageAdapter, StoragePointer } from "@fulfillpay/storage-adapter";
+} from "@tyrpay/sdk-core";
+import type { StorageAdapter, StoragePointer } from "@tyrpay/storage-adapter";
 import {
   MockZkTlsAdapter,
   type MockProvenFetchInput,
   type MockRawProof,
   type MockScenario,
   type ZkTlsRequestEvidence
-} from "@fulfillpay/zktls-adapter";
+} from "@tyrpay/zktls-adapter";
 
 export interface ProvenMockCallInput {
   taskContext: TaskContext;

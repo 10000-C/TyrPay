@@ -2,10 +2,10 @@
   "name": "receipt.timestamp-before-funded",
   "objectType": "DeliveryReceipt",
   "object": {
-    "schemaVersion": "fulfillpay.delivery-receipt.v1",
+    "schemaVersion": "TyrPay.delivery-receipt.v1",
     "taskContext": {
-      "schemaVersion": "fulfillpay.task-context.v1",
-      "protocol": "FulfillPay",
+      "schemaVersion": "TyrPay.task-context.v1",
+      "protocol": "TyrPay",
       "version": 1,
       "chainId": "31337",
       "settlementContract": "0x4444444444444444444444444444444444444444",
@@ -29,9 +29,9 @@
       }
     },
     "rawProofHash": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-    "rawProofURI": "ipfs://fulfillpay/raw-proof/mock-proof-0001"
+    "rawProofURI": "ipfs://TyrPay/raw-proof/mock-proof-0001"
   },
-  "canonical": "{\"callIndex\":0,\"callIntentHash\":\"0xddd7776ef8be07ac441076aefa5eb46859a31129311dbad6b8b72f864775d76b\",\"extracted\":{\"model\":\"gpt-4o-mini\",\"usage\":{\"totalTokens\":128}},\"observedAt\":\"1000000000000\",\"provider\":\"mock\",\"providerProofId\":\"mock-proof-0001\",\"rawProofHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"rawProofURI\":\"ipfs://fulfillpay/raw-proof/mock-proof-0001\",\"requestHash\":\"0x9999999999999999999999999999999999999999999999999999999999999999\",\"responseHash\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"schemaVersion\":\"fulfillpay.delivery-receipt.v1\",\"taskContext\":{\"buyer\":\"0x1111111111111111111111111111111111111111\",\"chainId\":\"31337\",\"commitmentHash\":\"0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a\",\"protocol\":\"FulfillPay\",\"schemaVersion\":\"fulfillpay.task-context.v1\",\"seller\":\"0x2222222222222222222222222222222222222222\",\"settlementContract\":\"0x4444444444444444444444444444444444444444\",\"taskId\":\"0x5555555555555555555555555555555555555555555555555555555555555555\",\"taskNonce\":\"0x6666666666666666666666666666666666666666666666666666666666666666\",\"version\":1}}",
+  "canonical": "{\"callIndex\":0,\"callIntentHash\":\"0xddd7776ef8be07ac441076aefa5eb46859a31129311dbad6b8b72f864775d76b\",\"extracted\":{\"model\":\"gpt-4o-mini\",\"usage\":{\"totalTokens\":128}},\"observedAt\":\"1000000000000\",\"provider\":\"mock\",\"providerProofId\":\"mock-proof-0001\",\"rawProofHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"rawProofURI\":\"ipfs://TyrPay/raw-proof/mock-proof-0001\",\"requestHash\":\"0x9999999999999999999999999999999999999999999999999999999999999999\",\"responseHash\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"schemaVersion\":\"TyrPay.delivery-receipt.v1\",\"taskContext\":{\"buyer\":\"0x1111111111111111111111111111111111111111\",\"chainId\":\"31337\",\"commitmentHash\":\"0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a\",\"protocol\":\"TyrPay\",\"schemaVersion\":\"TyrPay.task-context.v1\",\"seller\":\"0x2222222222222222222222222222222222222222\",\"settlementContract\":\"0x4444444444444444444444444444444444444444\",\"taskId\":\"0x5555555555555555555555555555555555555555555555555555555555555555\",\"taskNonce\":\"0x6666666666666666666666666666666666666666666666666666666666666666\",\"version\":1}}",
   "hash": null,
   "notes": "observedAt = 1000000000000 (2001-09-08), which is before any realistic task fundedAt timestamp. Verifier check: withinTaskWindow = false (observedAt < fundedAt) → passed = false → REFUND. See E2E-08."
 }

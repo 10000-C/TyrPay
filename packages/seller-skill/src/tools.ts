@@ -6,8 +6,8 @@ import {
   type ExecutionCommitment,
   type DeliveryReceipt,
   type UnixMillis
-} from "@fulfillpay/sdk-core";
-import type { SellerAgent, ContractLike } from "@fulfillpay/seller-sdk";
+} from "@tyrpay/sdk-core";
+import type { SellerAgent, ContractLike } from "@tyrpay/seller-sdk";
 import type { SellerTool, SellerSkillConfig, ReadableContractLike } from "./types.js";
 
 const ZERO_HASH = "0x" + "0".repeat(64);
@@ -32,9 +32,9 @@ export function createSellerTools(config: SellerSkillConfig): SellerTool[] {
 
 function acceptTaskTool(agent: SellerAgent, contract: ReadableContractLike, verifier: string): SellerTool {
   return {
-    name: "fulfillpay_accept_task",
+    name: "tyrpay_accept_task",
     description:
-      "Accept a FulfillPay task as a seller: build the execution commitment, upload it to storage, and submit it on-chain. " +
+      "Accept a TyrPay task as a seller: build the execution commitment, upload it to storage, and submit it on-chain. " +
       "Call this after the buyer shares a taskId and you have agreed to perform the task. " +
       "The commitment declares which API endpoint, allowed models, and minimum token delivery you commit to. " +
       "Once submitted, the buyer will validate and fund the task.",
@@ -112,11 +112,11 @@ function acceptTaskTool(agent: SellerAgent, contract: ReadableContractLike, veri
 
 function executeTaskTool(agent: SellerAgent): SellerTool {
   return {
-    name: "fulfillpay_execute_task",
+    name: "tyrpay_execute_task",
     description:
-      "Execute a funded FulfillPay task via a zkTLS-proven API call. " +
+      "Execute a funded TyrPay task via a zkTLS-proven API call. " +
       "Performs the AI inference request with cryptographic proof, then uploads the proof and delivery receipt to storage. " +
-      "Returns the receipt object needed for fulfillpay_submit_proof. " +
+      "Returns the receipt object needed for tyrpay_submit_proof. " +
       "Call this once per API call declared in your commitment — the task must be in FUNDED status.",
     inputSchema: {
       type: "object",
@@ -124,7 +124,7 @@ function executeTaskTool(agent: SellerAgent): SellerTool {
       properties: {
         commitment: {
           type: "object",
-          description: "The ExecutionCommitment you submitted (returned by fulfillpay_accept_task)"
+          description: "The ExecutionCommitment you submitted (returned by tyrpay_accept_task)"
         },
         taskNonce: {
           type: "string",
@@ -196,10 +196,10 @@ function executeTaskTool(agent: SellerAgent): SellerTool {
 
 function submitProofTool(agent: SellerAgent, contract: ReadableContractLike): SellerTool {
   return {
-    name: "fulfillpay_submit_proof",
+    name: "tyrpay_submit_proof",
     description:
       "Assemble all delivery receipts into a proof bundle, upload it to storage, and submit the proof bundle hash on-chain. " +
-      "Call this after all fulfillpay_execute_task calls are complete to claim payment. " +
+      "Call this after all tyrpay_execute_task calls are complete to claim payment. " +
       "Transitions the task to PROOF_SUBMITTED — the verifier then settles and releases payment to the seller.",
     inputSchema: {
       type: "object",
@@ -211,7 +211,7 @@ function submitProofTool(agent: SellerAgent, contract: ReadableContractLike): Se
         },
         receipts: {
           type: "array",
-          description: "Array of receipt objects returned by fulfillpay_execute_task — one per API call",
+          description: "Array of receipt objects returned by tyrpay_execute_task — one per API call",
           items: { type: "object" },
           minItems: 1
         }
@@ -240,10 +240,10 @@ function submitProofTool(agent: SellerAgent, contract: ReadableContractLike): Se
 
 function checkSettlementTool(contract: ReadableContractLike): SellerTool {
   return {
-    name: "fulfillpay_check_settlement",
+    name: "tyrpay_check_settlement",
     description:
-      "Check whether a FulfillPay task has been settled and payment released to the seller. " +
-      "Call this after fulfillpay_submit_proof to track when the verifier settles the task. " +
+      "Check whether a TyrPay task has been settled and payment released to the seller. " +
+      "Call this after tyrpay_submit_proof to track when the verifier settles the task. " +
       "Returns settlement timestamp, report hash, and current task status.",
     inputSchema: {
       type: "object",

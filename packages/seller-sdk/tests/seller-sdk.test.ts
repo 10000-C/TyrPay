@@ -3,10 +3,10 @@ import test from "node:test";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 
-import type { ExecutionCommitment, ProofBundle, DeliveryReceipt, Bytes32 } from "@fulfillpay/sdk-core";
-import { hashDeliveryReceipt, hashExecutionCommitment, hashProofBundle } from "@fulfillpay/sdk-core";
-import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
-import { MockZkTlsAdapter } from "@fulfillpay/zktls-adapter";
+import type { ExecutionCommitment, ProofBundle, DeliveryReceipt, Bytes32 } from "@tyrpay/sdk-core";
+import { hashDeliveryReceipt, hashExecutionCommitment, hashProofBundle } from "@tyrpay/sdk-core";
+import { MemoryStorageAdapter } from "@tyrpay/storage-adapter";
+import { MockZkTlsAdapter } from "@tyrpay/zktls-adapter";
 
 import { SellerAgent } from "../src/seller-agent.js";
 import type { SellerConfig, ContractLike, Signer } from "../src/types.js";
@@ -39,8 +39,8 @@ const SELLER_ADDRESS = "0x2222222222222222222222222222222222222222";
 const SETTLEMENT_CONTRACT = "0x4444444444444444444444444444444444444444";
 const CHAIN_ID = "31337";
 const TASK_NONCE = "0x6666666666666666666666666666666666666666666666666666666666666666";
-const COMMITMENT_URI = "ipfs://fulfillpay/commitments/test";
-const PROOF_BUNDLE_URI = "ipfs://fulfillpay/proof-bundles/test";
+const COMMITMENT_URI = "ipfs://TyrPay/commitments/test";
+const PROOF_BUNDLE_URI = "ipfs://TyrPay/proof-bundles/test";
 
 // ── Mock implementations ────────────────────────────────────────
 
@@ -136,9 +136,9 @@ test("buildTaskContextFromCommitment builds a valid TaskContext", () => {
   assert.equal(taskContext.chainId, CHAIN_ID);
   assert.equal(taskContext.settlementContract, SETTLEMENT_CONTRACT);
   assert.equal(taskContext.taskNonce, TASK_NONCE);
-  assert.equal(taskContext.protocol, "FulfillPay");
+  assert.equal(taskContext.protocol, "TyrPay");
   assert.equal(taskContext.version, 1);
-  assert.equal(taskContext.schemaVersion, "fulfillpay.task-context.v1");
+  assert.equal(taskContext.schemaVersion, "TyrPay.task-context.v1");
   assert.equal(
     taskContext.commitmentHash,
     commitmentFixture.hash,
@@ -203,7 +203,7 @@ test("provenFetch produces a valid DeliveryReceipt", async () => {
 
   const receipt = result.receipt;
 
-  assert.equal(receipt.schemaVersion, "fulfillpay.delivery-receipt.v1");
+  assert.equal(receipt.schemaVersion, "TyrPay.delivery-receipt.v1");
   assert.equal(receipt.callIndex, 0);
   assert.equal(receipt.provider, "mock");
   assert.equal(receipt.taskContext.taskId, commitment.taskId);
@@ -290,7 +290,7 @@ test("buildDeliveryReceipt returns a valid DeliveryReceipt", async () => {
     taskNonce: TASK_NONCE
   });
 
-  assert.equal(receipt.schemaVersion, "fulfillpay.delivery-receipt.v1");
+  assert.equal(receipt.schemaVersion, "TyrPay.delivery-receipt.v1");
   assert.equal(receipt.callIndex, 0);
   assert.equal(receipt.extracted.model, "gpt-4o-mini");
 });
@@ -321,7 +321,7 @@ test("buildProofBundle assembles a valid ProofBundle from receipts", async () =>
     createdAt: "1735686600000"
   });
 
-  assert.equal(bundle.schemaVersion, "fulfillpay.proof-bundle.v1");
+  assert.equal(bundle.schemaVersion, "TyrPay.proof-bundle.v1");
   assert.equal(bundle.taskId, commitment.taskId);
   assert.equal(bundle.seller, commitment.seller);
   assert.equal(bundle.receipts.length, 1);

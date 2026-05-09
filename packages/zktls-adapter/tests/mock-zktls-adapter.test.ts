@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { assertDeliveryReceipt, type Bytes32, type CallIntent, type TaskContext } from "@fulfillpay/sdk-core";
+import { assertDeliveryReceipt, type Bytes32, type CallIntent, type TaskContext } from "@tyrpay/sdk-core";
 
 import { hashRequestEvidence, hashResponseEvidence } from "../src/core/index.js";
 import {

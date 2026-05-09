@@ -4,7 +4,7 @@ import {
   normalizeBytes32,
   type Bytes32,
   type DeliveryReceipt
-} from "@fulfillpay/sdk-core";
+} from "@tyrpay/sdk-core";
 
 import {
   assertReceiptContextMatchesProofContext,
@@ -230,7 +230,7 @@ function assertReclaimRawProofPayload(payload: unknown): asserts payload is Recl
   const object = assertRecord(payload, "ReclaimRawProofPayload");
 
   if (object.proofSchemaVersion !== RECLAIM_RAW_PROOF_SCHEMA_VERSION) {
-    throw new TypeError("proofSchemaVersion must be fulfillpay.reclaim-zktls-proof.v1.");
+    throw new TypeError("proofSchemaVersion must be TyrPay.reclaim-zktls-proof.v1.");
   }
 
   if (object.provider !== RECLAIM_ZKTLS_PROVIDER) {

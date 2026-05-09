@@ -1,5 +1,5 @@
-import type { BuyerSdk } from "@fulfillpay/buyer-sdk";
-import { createBuyerTools, type BuyerTool } from "@fulfillpay/buyer-skill";
+import type { BuyerSdk } from "@tyrpay/buyer-sdk";
+import { createBuyerTools, type BuyerTool } from "@tyrpay/buyer-skill";
 import type { ClaudeTool, OpenAITool } from "./types.js";
 
 /**

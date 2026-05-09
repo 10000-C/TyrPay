@@ -19,10 +19,10 @@ import {
   type UIntLike,
   type URI,
   type UnixMillis
-} from "@fulfillpay/sdk-core";
+} from "@tyrpay/sdk-core";
 import { performance } from "node:perf_hooks";
-import type { StorageAdapter, StoragePointer } from "@fulfillpay/storage-adapter";
-import type { ZkTlsAdapter, ZkTlsReceiptContext, ZkTlsRequestEvidence } from "@fulfillpay/zktls-adapter";
+import type { StorageAdapter, StoragePointer } from "@tyrpay/storage-adapter";
+import type { ZkTlsAdapter, ZkTlsReceiptContext, ZkTlsRequestEvidence } from "@tyrpay/zktls-adapter";
 
 import type {
   SellerConfig,
@@ -78,7 +78,7 @@ export interface BuildProofBundleInput {
 }
 
 /**
- * SellerAgent — the main class driving the Seller side of the FulfillPay protocol.
+ * SellerAgent — the main class driving the Seller side of the TyrPay protocol.
  *
  * Provides methods for:
  * - Submitting execution commitments on-chain
@@ -125,7 +125,7 @@ export class SellerAgent {
    * Submit an execution commitment on-chain.
    *
    * This calls `submitCommitment(taskId, commitmentHash, commitmentURI)` on the
-   * FulfillPaySettlement contract, transitioning the task from INTENT_CREATED to
+   * TyrPaySettlement contract, transitioning the task from INTENT_CREATED to
    * COMMITMENT_SUBMITTED.
    *
    * @param contract - The settlement contract instance (ethers Contract)
@@ -171,7 +171,7 @@ export class SellerAgent {
    * @returns The delivery receipt and raw proof
    */
   async provenFetch(input: ProvenFetchInput): Promise<ProvenFetchOutput> {
-    const collectTiming = process.env.FULFILLPAY_E2E_TIMING === "1";
+    const collectTiming = process.env.tyrpay_E2E_TIMING === "1";
     const startedAt = performance.now();
     const timings: Array<{ step: string; ms: number }> = [];
     const recordTiming = (step: string, stepStartedAt: number) => {
@@ -368,7 +368,7 @@ export class SellerAgent {
    * Submit a proof bundle hash on-chain.
    *
    * This calls `submitProofBundle(taskId, proofBundleHash, proofBundleURI)` on the
-   * FulfillPaySettlement contract, transitioning the task from FUNDED to PROOF_SUBMITTED.
+   * TyrPaySettlement contract, transitioning the task from FUNDED to PROOF_SUBMITTED.
    *
    * @param contract - The settlement contract instance (ethers Contract)
    * @param taskId - The task ID

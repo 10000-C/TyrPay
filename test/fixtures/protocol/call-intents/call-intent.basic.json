@@ -2,7 +2,7 @@
   "name": "call-intent.basic",
   "objectType": "CallIntent",
   "object": {
-    "schemaVersion": "fulfillpay.call-intent.v1",
+    "schemaVersion": "TyrPay.call-intent.v1",
     "taskContextHash": "0x1385f097d4a29a5e8268c6da90fc09848c035b8199f1b32d41c3a38f2d374207",
     "callIndex": 0,
     "host": "api.openai.com",
@@ -11,7 +11,7 @@
     "declaredModel": "gpt-4o-mini",
     "requestBodyHash": "0x8888888888888888888888888888888888888888888888888888888888888888"
   },
-  "canonical": "{\"callIndex\":0,\"declaredModel\":\"gpt-4o-mini\",\"host\":\"api.openai.com\",\"method\":\"POST\",\"path\":\"/v1/chat/completions\",\"requestBodyHash\":\"0x8888888888888888888888888888888888888888888888888888888888888888\",\"schemaVersion\":\"fulfillpay.call-intent.v1\",\"taskContextHash\":\"0x1385f097d4a29a5e8268c6da90fc09848c035b8199f1b32d41c3a38f2d374207\"}",
+  "canonical": "{\"callIndex\":0,\"declaredModel\":\"gpt-4o-mini\",\"host\":\"api.openai.com\",\"method\":\"POST\",\"path\":\"/v1/chat/completions\",\"requestBodyHash\":\"0x8888888888888888888888888888888888888888888888888888888888888888\",\"schemaVersion\":\"TyrPay.call-intent.v1\",\"taskContextHash\":\"0x1385f097d4a29a5e8268c6da90fc09848c035b8199f1b32d41c3a38f2d374207\"}",
   "hash": "0xddd7776ef8be07ac441076aefa5eb46859a31129311dbad6b8b72f864775d76b",
   "notes": "Normalized single-call intent derived from the shared task context."
 }

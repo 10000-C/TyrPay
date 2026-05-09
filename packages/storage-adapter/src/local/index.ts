@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import type { URI } from "@fulfillpay/sdk-core";
+import type { URI } from "@tyrpay/sdk-core";
 
 import type { GetObjectOptions, PutObjectOptions, StorageAdapter, StoragePointer } from "../types.js";
 import { StorageConfigurationError, StorageNotFoundError } from "../types.js";

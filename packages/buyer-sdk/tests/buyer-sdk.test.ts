@@ -3,8 +3,8 @@ import { describe, it } from "node:test";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 
-import type { ExecutionCommitment, VerificationReport } from "@fulfillpay/sdk-core";
-import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
+import type { ExecutionCommitment, VerificationReport } from "@tyrpay/sdk-core";
+import { MemoryStorageAdapter } from "@tyrpay/storage-adapter";
 
 import { BuyerSdk } from "../src/client.js";
 import { BuyerSdkConfigurationError, type BuyerSdkConfig } from "../src/types.js";

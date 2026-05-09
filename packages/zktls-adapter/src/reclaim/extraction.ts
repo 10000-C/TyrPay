@@ -2,7 +2,7 @@ import {
   normalizeUIntString,
   type ExtractedReceiptFields,
   type UnixMillis
-} from "@fulfillpay/sdk-core";
+} from "@tyrpay/sdk-core";
 
 import type { ProviderProofContext, ZkTlsResponseEvidence } from "../core/index.js";
 import { buildReclaimProofContextBinding } from "./client.js";
@@ -43,7 +43,7 @@ export function assertReclaimProofContextBound(proof: unknown, expectedProofCont
   const expected = buildReclaimProofContextBinding(expectedProofContext);
 
   if (!actual) {
-    throw new TypeError("Reclaim proof does not include FulfillPay proof context binding.");
+    throw new TypeError("Reclaim proof does not include TyrPay proof context binding.");
   }
 
   if (
@@ -53,7 +53,7 @@ export function assertReclaimProofContextBound(proof: unknown, expectedProofCont
     actual.proofContextHash !== expected.proofContextHash ||
     !providerProofContextsEqual(actual.proofContext, expected.proofContext)
   ) {
-    throw new TypeError("Reclaim proof context binding does not match FulfillPay proof context.");
+    throw new TypeError("Reclaim proof context binding does not match TyrPay proof context.");
   }
 }
 
@@ -250,11 +250,11 @@ function parseContextCandidate(candidate: unknown): ReclaimProofContextBinding |
     return null;
   }
 
-  const object = isRecord(parsed.fulfillpay) ? parsed.fulfillpay : parsed;
+  const object = isRecord(parsed.TyrPay) ? parsed.TyrPay : parsed;
   const proofContext = object.proofContext;
 
   if (
-    object.protocol !== "FulfillPay" ||
+    object.protocol !== "TyrPay" ||
     object.version !== 1 ||
     object.provider !== "reclaim" ||
     typeof object.proofContextHash !== "string" ||

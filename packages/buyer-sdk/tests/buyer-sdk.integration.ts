@@ -6,8 +6,8 @@ import {
   SCHEMA_VERSIONS,
   type ExecutionCommitment,
   type VerificationReport
-} from "@fulfillpay/sdk-core";
-import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
+} from "@tyrpay/sdk-core";
+import { MemoryStorageAdapter } from "@tyrpay/storage-adapter";
 
 import { BuyerSdk, BuyerSdkConfigurationError, BuyerSdkValidationError, type BuyerTask, type VerificationReportResolver } from "../dist/index.js";
 
@@ -32,7 +32,7 @@ export async function runBuyerSdkIntegration(ethers: any) {
   await verifierRegistry.waitForDeployment();
   await (await verifierRegistry.addVerifier(verifier.address)).wait();
 
-  const settlementFactory = await ethers.getContractFactory("FulfillPaySettlement", owner);
+  const settlementFactory = await ethers.getContractFactory("TyrPaySettlement", owner);
   const settlement = await settlementFactory.deploy(
     await verifierRegistry.getAddress(),
     15n * 60n * 1000n,
@@ -41,7 +41,7 @@ export async function runBuyerSdkIntegration(ethers: any) {
   await settlement.waitForDeployment();
 
   const mockTokenFactory = await ethers.getContractFactory("MockERC20", owner);
-  const mockToken = await mockTokenFactory.deploy("FulfillPay Mock USD", "fpUSD", owner.address, 0);
+  const mockToken = await mockTokenFactory.deploy("TyrPay Mock USD", "fpUSD", owner.address, 0);
   await mockToken.waitForDeployment();
 
   await (await settlement.setAllowedToken(await mockToken.getAddress(), true)).wait();

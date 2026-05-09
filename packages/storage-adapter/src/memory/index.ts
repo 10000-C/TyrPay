@@ -1,4 +1,4 @@
-import type { URI } from "@fulfillpay/sdk-core";
+import type { URI } from "@tyrpay/sdk-core";
 
 import type { GetObjectOptions, PutObjectOptions, StorageAdapter, StoragePointer } from "../types.js";
 import { StorageNotFoundError } from "../types.js";

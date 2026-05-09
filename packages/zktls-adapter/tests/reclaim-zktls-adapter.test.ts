@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { assertDeliveryReceipt, type Bytes32, type CallIntent, type TaskContext } from "@fulfillpay/sdk-core";
+import { assertDeliveryReceipt, type Bytes32, type CallIntent, type TaskContext } from "@tyrpay/sdk-core";
 
 import {
   ReclaimZkTlsAdapter,
@@ -243,7 +243,7 @@ test("reclaim verifyRawProof rejects rehashed envelopes that diverge from native
   assert.equal(await adapter.verifyRawProof(tampered), false);
 });
 
-test("reclaim verifyRawProof rejects native proofs without FulfillPay context binding", async () => {
+test("reclaim verifyRawProof rejects native proofs without TyrPay context binding", async () => {
   const adapter = new ReclaimZkTlsAdapter({
     appId: "app-id",
     appSecret: "app-secret",

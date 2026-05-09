@@ -5,7 +5,7 @@ import {
   SCHEMA_VERSIONS,
   hashVerificationReport,
   type Bytes32
-} from "@fulfillpay/sdk-core";
+} from "@tyrpay/sdk-core";
 
 import {
   deployE2eFixture,

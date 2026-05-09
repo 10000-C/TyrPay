@@ -1,5 +1,5 @@
-import type { SellerAgent, ContractLike } from "@fulfillpay/seller-sdk";
-import { createSellerTools, type SellerTool, type ReadableContractLike } from "@fulfillpay/seller-skill";
+import type { SellerAgent, ContractLike } from "@tyrpay/seller-sdk";
+import { createSellerTools, type SellerTool, type ReadableContractLike } from "@tyrpay/seller-skill";
 import type { ClaudeTool, OpenAITool } from "./types.js";
 
 /**

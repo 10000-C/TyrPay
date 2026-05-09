@@ -6,8 +6,8 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 
 import {
-  FulfillPaySettlement,
-  FulfillPaySettlement__factory,
+  TyrPaySettlement,
+  TyrPaySettlement__factory,
   MockERC20,
   MockERC20__factory,
   VerifierRegistry,
@@ -71,16 +71,16 @@ async function deployFixture() {
   const verificationTimeoutMs = 60n * 60n * 1000n;
   const verifierRegistryAddress = await addressOf(verifierRegistry);
 
-  const settlementFactory = new FulfillPaySettlement__factory(owner);
+  const settlementFactory = new TyrPaySettlement__factory(owner);
   const settlement = (await settlementFactory.deploy(
     verifierRegistryAddress,
     gracePeriodMs,
     verificationTimeoutMs
-  )) as FulfillPaySettlement;
+  )) as TyrPaySettlement;
   await settlement.waitForDeployment();
 
   const mockTokenFactory = new MockERC20__factory(owner);
-  const mockToken = (await mockTokenFactory.deploy("FulfillPay Mock USD", "fpUSD", owner.address, 0)) as MockERC20;
+  const mockToken = (await mockTokenFactory.deploy("TyrPay Mock USD", "fpUSD", owner.address, 0)) as MockERC20;
   await mockToken.waitForDeployment();
   const settlementAddress = await addressOf(settlement);
   await settlement.setAllowedToken(await addressOf(mockToken), true);
@@ -111,7 +111,7 @@ async function createFundedTaskOnFixture(
   const current = await time.latest();
   const deadlineMs = BigInt(current + 3600) * 1000n;
   const metadataHash = ethers.ZeroHash;
-  const metadataUri = "ipfs://fulfillpay/task/basic";
+  const metadataUri = "ipfs://TyrPay/task/basic";
   const tokenAddress = await addressOf(fixture.mockToken);
   const args = [
     fixture.seller.address,
@@ -129,7 +129,7 @@ async function createFundedTaskOnFixture(
 
   await fixture.settlement
     .connect(fixture.seller)
-    .submitCommitment(taskId, commitmentHash, "ipfs://fulfillpay/commitments/basic");
+    .submitCommitment(taskId, commitmentHash, "ipfs://TyrPay/commitments/basic");
   await fixture.settlement.connect(fixture.buyer).fundTask(taskId);
 
   return {
@@ -160,7 +160,7 @@ async function createProofSubmittedTask(
 
   await fundedTask.settlement
     .connect(fundedTask.seller)
-    .submitProofBundle(fundedTask.taskId, bundleHash, "ipfs://fulfillpay/proof-bundles/basic");
+    .submitProofBundle(fundedTask.taskId, bundleHash, "ipfs://TyrPay/proof-bundles/basic");
 
   return {
     ...fundedTask,
@@ -187,7 +187,7 @@ async function signReport(
 ) {
   return verifier.signTypedData(
     {
-      name: "FulfillPay",
+      name: "TyrPay",
       version: "1",
       chainId,
       verifyingContract: settlementAddress
@@ -210,7 +210,7 @@ async function signReport(
   );
 }
 
-describe("FulfillPaySettlement", function () {
+describe("TyrPaySettlement", function () {
   it("matches the EIP-712 vector and contract hashing helpers", async function () {
     const vector = loadJson<VectorFile>(path.join("vectors", "eip712", "verification-report-pass-basic.json"));
     const hashVector = loadJson<HashVectorFile>(path.join("vectors", "hashing", "pass-basic.json"));
@@ -262,7 +262,7 @@ describe("FulfillPaySettlement", function () {
     const contractDigest = await fixture.settlement.hashTypedVerificationReport(report);
     const ethersDigest = ethers.TypedDataEncoder.hash(
       {
-        name: "FulfillPay",
+        name: "TyrPay",
         version: "1",
         chainId: actualChainId,
         verifyingContract: actualSettlementAddress
@@ -462,7 +462,7 @@ describe("FulfillPaySettlement", function () {
     const secondTask = await createFundedTaskOnFixture(fixture);
     await secondTask.settlement
       .connect(secondTask.seller)
-      .submitProofBundle(secondTask.taskId, sharedProofBundleHash, "ipfs://fulfillpay/proof-bundles/replay");
+      .submitProofBundle(secondTask.taskId, sharedProofBundleHash, "ipfs://TyrPay/proof-bundles/replay");
 
     const reportTwo = {
       taskId: secondTask.taskId,

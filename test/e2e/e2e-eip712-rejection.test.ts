@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { SCHEMA_VERSIONS, hashVerificationReport, type Bytes32 } from "@fulfillpay/sdk-core";
+import { SCHEMA_VERSIONS, hashVerificationReport, type Bytes32 } from "@tyrpay/sdk-core";
 
 import {
   deployE2eFixture,

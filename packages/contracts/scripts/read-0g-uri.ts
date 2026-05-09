@@ -3,7 +3,7 @@ import path from "node:path";
 
 import * as dotenv from "dotenv";
 import { Indexer } from "@0gfoundation/0g-storage-ts-sdk";
-import { parseZeroGStorageUri } from "@fulfillpay/storage-adapter";
+import { parseZeroGStorageUri } from "@tyrpay/storage-adapter";
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 dotenv.config();
@@ -33,7 +33,7 @@ async function main() {
 
   console.log(`URI: ${uri}`);
   console.log(`Namespace: ${namespace}`);
-  console.log(`FulfillPay Hash: ${hash}`);
+  console.log(`TyrPay Hash: ${hash}`);
   console.log(`Root Hash: ${rootHash}`);
   if (txHash) {
     console.log(`Tx Hash: ${txHash}`);

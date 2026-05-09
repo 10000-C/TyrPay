@@ -11,8 +11,8 @@ import {
   type DeliveryReceipt,
   type ExecutionCommitment,
   type ProofBundle
-} from "@fulfillpay/sdk-core";
-import { MemoryStorageAdapter } from "@fulfillpay/storage-adapter";
+} from "@tyrpay/sdk-core";
+import { MemoryStorageAdapter } from "@tyrpay/storage-adapter";
 import {
   MockZkTlsAdapter,
   ReclaimZkTlsAdapter,
@@ -23,7 +23,7 @@ import {
   type ReclaimPrivateOptions,
   type ReclaimPublicOptions,
   type ReclaimRawProof
-} from "@fulfillpay/zktls-adapter";
+} from "@tyrpay/zktls-adapter";
 import { Wallet, verifyTypedData } from "ethers";
 
 import {
@@ -672,7 +672,7 @@ async function buildReclaimFixture(options: BuildReclaimFixtureOptions = {}) {
   const verifierWallet = new Wallet(PRIVATE_KEY);
   const verifierAddress = verifierWallet.address.toLowerCase() as Address;
   const commitment: ExecutionCommitment = {
-    schemaVersion: "fulfillpay.execution-commitment.v1",
+    schemaVersion: "TyrPay.execution-commitment.v1",
     taskId: TASK_ID,
     buyer: BUYER,
     seller: SELLER,
@@ -693,8 +693,8 @@ async function buildReclaimFixture(options: BuildReclaimFixtureOptions = {}) {
   assert.equal(commitmentPointer.hash, commitmentHash);
 
   const taskContext = {
-    schemaVersion: "fulfillpay.task-context.v1",
-    protocol: "FulfillPay",
+    schemaVersion: "TyrPay.task-context.v1",
+    protocol: "TyrPay",
     version: 1,
     chainId: CHAIN_ID,
     settlementContract: SETTLEMENT_CONTRACT,
@@ -748,7 +748,7 @@ async function buildReclaimFixture(options: BuildReclaimFixtureOptions = {}) {
   const receipt = options.mutateReceipt ? options.mutateReceipt(baseReceipt, rawProof) : baseReceipt;
 
   const proofBundle: ProofBundle = {
-    schemaVersion: "fulfillpay.proof-bundle.v1",
+    schemaVersion: "TyrPay.proof-bundle.v1",
     taskId: TASK_ID,
     commitmentHash,
     seller: SELLER,
@@ -801,7 +801,7 @@ async function buildFixture(options: BuildFixtureOptions = {}) {
   const verifierWallet = new Wallet(PRIVATE_KEY);
   const verifierAddress = verifierWallet.address.toLowerCase() as Address;
   const commitment: ExecutionCommitment = {
-    schemaVersion: "fulfillpay.execution-commitment.v1",
+    schemaVersion: "TyrPay.execution-commitment.v1",
     taskId: TASK_ID,
     buyer: BUYER,
     seller: SELLER,
@@ -822,8 +822,8 @@ async function buildFixture(options: BuildFixtureOptions = {}) {
   assert.equal(commitmentPointer.hash, commitmentHash);
 
   const taskContext = {
-    schemaVersion: "fulfillpay.task-context.v1",
-    protocol: "FulfillPay",
+    schemaVersion: "TyrPay.task-context.v1",
+    protocol: "TyrPay",
     version: 1,
     chainId: CHAIN_ID,
     settlementContract: SETTLEMENT_CONTRACT,
@@ -876,7 +876,7 @@ async function buildFixture(options: BuildFixtureOptions = {}) {
   });
   const receipt = options.mutateReceipt ? options.mutateReceipt(baseReceipt) : baseReceipt;
   const proofBundle: ProofBundle = {
-    schemaVersion: "fulfillpay.proof-bundle.v1",
+    schemaVersion: "TyrPay.proof-bundle.v1",
     taskId: TASK_ID,
     commitmentHash,
     seller: SELLER,

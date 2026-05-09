@@ -1,19 +1,22 @@
 {
-  "name": "@fulfillpay/agent-kit",
-  "private": true,
+  "name": "@tyrpay/agent-kit",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@fulfillpay/buyer-sdk": "workspace:*",
-    "@fulfillpay/buyer-skill": "workspace:*",
-    "@fulfillpay/seller-sdk": "workspace:*",
-    "@fulfillpay/seller-skill": "workspace:*"
+    "@tyrpay/buyer-sdk": "workspace:*",
+    "@tyrpay/buyer-skill": "workspace:*",
+    "@tyrpay/seller-sdk": "workspace:*",
+    "@tyrpay/seller-skill": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.15.30"

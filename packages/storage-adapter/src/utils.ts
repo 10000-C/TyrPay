@@ -1,4 +1,4 @@
-import { canonicalize, hashObject, type Bytes32, type URI } from "@fulfillpay/sdk-core";
+import { canonicalize, hashObject, type Bytes32, type URI } from "@tyrpay/sdk-core";
 
 import type { GetObjectOptions, PutObjectOptions, StoragePointer } from "./types.js";
 import { StorageConfigurationError, StorageIntegrityError } from "./types.js";

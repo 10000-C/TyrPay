@@ -5,7 +5,7 @@ import {
   SCHEMA_VERSIONS,
   hashVerificationReport,
   type Bytes32
-} from "@fulfillpay/sdk-core";
+} from "@tyrpay/sdk-core";
 
 import {
   deployE2eFixture,
@@ -107,7 +107,7 @@ describe("E2E-12/05: Invalid Report Signature & Integrity Rejection", function (
     // Stranger (not registered in VerifierRegistry) signs
     const fakeSignature = await env.stranger.signTypedData(
       {
-        name: "FulfillPay", version: "1",
+        name: "TyrPay", version: "1",
         chainId: env.chainId, verifyingContract: env.settlementAddress
       },
       {

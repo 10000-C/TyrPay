@@ -1,4 +1,4 @@
-import type { Bytes32, URI } from "@fulfillpay/sdk-core";
+import type { Bytes32, URI } from "@tyrpay/sdk-core";
 
 export interface StoragePointer {
   uri: URI;

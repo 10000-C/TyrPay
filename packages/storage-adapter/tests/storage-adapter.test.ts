@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import type { ProofBundle } from "@fulfillpay/sdk-core";
+import type { ProofBundle } from "@tyrpay/sdk-core";
 
 import {
   LocalStorageAdapter,
@@ -64,7 +64,7 @@ test("memory adapter detects in-memory tampering before returning stored objects
 
 test("local adapter persists payloads under file URIs and reloads them with hash verification", async () => {
   const fixture = loadFixture<ProofBundle>("test/fixtures/protocol/proof-bundles/proof-bundle.pass-basic.json");
-  const baseDirectory = await mkdtemp(path.join(tmpdir(), "fulfillpay-storage-"));
+  const baseDirectory = await mkdtemp(path.join(tmpdir(), "TyrPay-storage-"));
   const adapter = new LocalStorageAdapter({ baseDirectory });
 
   try {
@@ -81,7 +81,7 @@ test("local adapter persists payloads under file URIs and reloads them with hash
 
 test("local adapter rejects tampered files", async () => {
   const fixture = loadFixture<ProofBundle>("test/fixtures/protocol/proof-bundles/proof-bundle.pass-basic.json");
-  const baseDirectory = await mkdtemp(path.join(tmpdir(), "fulfillpay-storage-"));
+  const baseDirectory = await mkdtemp(path.join(tmpdir(), "TyrPay-storage-"));
   const adapter = new LocalStorageAdapter({ baseDirectory });
 
   try {
@@ -125,7 +125,7 @@ test("zero-g adapter preserves the storage adapter contract through an injected 
   assert.deepEqual(restored, fixture.object);
 });
 
-test("zero-g storage URIs preserve FulfillPay hashes and 0G root hashes separately", () => {
+test("zero-g storage URIs preserve TyrPay hashes and 0G root hashes separately", () => {
   const hash = `0x${"1".repeat(64)}` as `0x${string}`;
   const rootHash = `0x${"2".repeat(64)}`;
   const txHash = `0x${"3".repeat(64)}`;
