@@ -151,7 +151,7 @@ Adapter config fields:
 - `appId`: Reclaim application id
 - `appSecret`: Reclaim application secret
 - `enableLogs`: whether to pass `logs=true` into `ReclaimClient`
-- `defaultUseTee`: default TEE mode if a call does not pass `providerOptions.useTee`
+- `defaultUseTee`: optional adapter config for TEE mode; if a call does not pass `providerOptions.useTee`, the effective default is `false`
 - `defaultRetries`: default retry count if a call does not pass `providerOptions.retries`
 - `defaultRetryIntervalMs`: default retry interval if a call does not pass `providerOptions.retryIntervalMs`
 

@@ -39,7 +39,7 @@ interface ReclaimZkFetchAdapterConfig {
   appId?: string;
   appSecret?: string;
   enableLogs?: boolean;
-  defaultUseTee?: boolean;
+  defaultUseTee?: boolean; // defaults to false
   defaultRetries?: number;
   defaultRetryIntervalMs?: number;
   clientFactory?: ReclaimClientFactory;
