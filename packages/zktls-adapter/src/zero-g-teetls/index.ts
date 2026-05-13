@@ -145,12 +145,7 @@ export class ZeroGTeeTlsAdapter
     const requestPath = input.requestPath ?? this.config.defaultRequestPath ?? DEFAULT_ZERO_G_TEETLS_REQUEST_PATH;
     const finalUrl = buildFinalUrl(serviceMetadata.endpoint, requestPath);
     const finalUrlObject = new URL(finalUrl);
-    const request = normalizeRequestEvidence({
-      ...input.request,
-      host: finalUrlObject.host,
-      path: finalUrlObject.pathname,
-      method: input.request.method.toUpperCase()
-    });
+    const request = normalizeRequestEvidence(input.request);
     assertRequestMatchesResolvedEndpoint(request, finalUrlObject);
 
     const proofContext = buildProviderProofContext({
