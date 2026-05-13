@@ -49,6 +49,8 @@ export interface ProvenFetchInput {
   taskNonce: Bytes32;
   /** Optional provider-specific parameters passed through to the zkTLS adapter */
   providerOptions?: Record<string, unknown>;
+  /** Named provider to use from SellerConfig.zkTlsAdapters. Falls back to default adapter. */
+  provider?: string;
 }
 
 /**
@@ -94,6 +96,7 @@ export class SellerAgent {
   readonly chainId: string;
   readonly storageAdapter: StorageAdapter;
   readonly zkTlsAdapter: ZkTlsAdapter;
+  readonly zkTlsAdapters?: Record<string, ZkTlsAdapter>;
 
   constructor(config: SellerConfig) {
     this.signer = config.signer;
@@ -101,6 +104,7 @@ export class SellerAgent {
     this.chainId = normalizeUIntString(config.chainId, "chainId");
     this.storageAdapter = config.storageAdapter;
     this.zkTlsAdapter = config.zkTlsAdapter;
+    this.zkTlsAdapters = config.zkTlsAdapters;
   }
 
   /**
@@ -215,6 +219,7 @@ export class SellerAgent {
     const callIntentHash = computeCallIntentHash(taskContext, input.callIndex, input.request, input.declaredModel);
 
     // Call the zkTLS adapter's provenFetch
+    const adapter = this.resolveAdapter(input.provider);
     const provenFetchInput: Record<string, unknown> = {
       taskContext,
       callIndex: input.callIndex,
@@ -225,7 +230,7 @@ export class SellerAgent {
     };
 
     const adapterStartedAt = performance.now();
-    const result = await this.zkTlsAdapter.provenFetch(provenFetchInput as Parameters<typeof this.zkTlsAdapter.provenFetch>[0]);
+    const result = await adapter.provenFetch(provenFetchInput as Parameters<typeof adapter.provenFetch>[0]);
     recordTiming("zkTlsAdapter.provenFetch", adapterStartedAt);
 
     // Upload the raw proof to storage first to get a URI
@@ -245,7 +250,7 @@ export class SellerAgent {
 
     // Normalize the raw proof into a DeliveryReceipt
     const normalizeReceiptStartedAt = performance.now();
-    const receipt = await this.zkTlsAdapter.normalizeReceipt(result.rawProof, receiptContext);
+    const receipt = await adapter.normalizeReceipt(result.rawProof, receiptContext);
     recordTiming("zkTlsAdapter.normalizeReceipt", normalizeReceiptStartedAt);
 
     const receiptUploadStartedAt = performance.now();
@@ -398,6 +403,19 @@ export class SellerAgent {
       proofBundleHash: normalizedHash,
       proofBundleURI
     };
+  }
+
+  private resolveAdapter(provider?: string): ZkTlsAdapter {
+    if (!provider) return this.zkTlsAdapter;
+
+    const adapter = this.zkTlsAdapters?.[provider];
+    if (!adapter) {
+      throw new TypeError(
+        `Unknown zkTLS provider "${provider}". Available: [${Object.keys(this.zkTlsAdapters ?? {}).join(", ")}]`
+      );
+    }
+
+    return adapter;
   }
 }
 

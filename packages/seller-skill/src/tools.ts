@@ -193,7 +193,11 @@ function executeTaskTool(agent: SellerAgent): SellerTool {
         },
         providerOptions: {
           type: "object",
-          description: "Optional zkTLS provider-specific parameters (e.g. Reclaim session options)"
+          description: "Optional zkTLS provider-specific parameters (e.g. providerAddress for 0G TeeTLS, Reclaim session options)"
+        },
+        provider: {
+          type: "string",
+          description: "zkTLS provider name to use (e.g. '0g-teetls', 'reclaim', 'mock'). Uses the default adapter if omitted."
         }
       },
       additionalProperties: false
@@ -212,6 +216,7 @@ function executeTaskTool(agent: SellerAgent): SellerTool {
         };
         declaredModel: string;
         providerOptions?: Record<string, unknown>;
+        provider?: string;
       };
 
       const result = await agent.provenFetch({
@@ -220,7 +225,8 @@ function executeTaskTool(agent: SellerAgent): SellerTool {
         callIndex: i.callIndex,
         request: i.request,
         declaredModel: i.declaredModel,
-        ...(i.providerOptions ? { providerOptions: i.providerOptions } : {})
+        ...(i.providerOptions ? { providerOptions: i.providerOptions } : {}),
+        ...(i.provider ? { provider: i.provider } : {})
       });
 
       return {

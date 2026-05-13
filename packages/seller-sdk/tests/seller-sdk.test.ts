@@ -736,3 +736,89 @@ test("provenFetch rejects declaredModel not in allowedModels", async () => {
     /declaredModel.*is not in commitment.allowedModels/
   );
 });
+
+// ── Multi-provider selection tests ───────────────────────────────
+
+test("provenFetch uses named provider from zkTlsAdapters when provider is specified", async () => {
+  const defaultAdapter = new MockZkTlsAdapter();
+  const namedAdapter = new CapturingMockZkTlsAdapter();
+
+  const agent = new SellerAgent({
+    signer: createMockSigner(),
+    settlementContract: SETTLEMENT_CONTRACT,
+    chainId: CHAIN_ID,
+    storageAdapter: new MemoryStorageAdapter(),
+    zkTlsAdapter: defaultAdapter,
+    zkTlsAdapters: {
+      "mock-named": namedAdapter
+    }
+  });
+
+  const commitment = commitmentFixture.object;
+  const result = await agent.provenFetch({
+    commitment,
+    callIndex: 0,
+    request: { host: "api.openai.com", path: "/v1/chat/completions", method: "POST" },
+    declaredModel: "gpt-4o-mini",
+    taskNonce: TASK_NONCE,
+    provider: "mock-named"
+  });
+
+  assert.equal(result.receipt.provider, "mock");
+  assert.ok(namedAdapter.capturedInput, "named adapter should have received the call");
+});
+
+test("provenFetch falls back to default adapter when provider is omitted", async () => {
+  const defaultAdapter = new CapturingMockZkTlsAdapter();
+  const namedAdapter = new CapturingMockZkTlsAdapter();
+
+  const agent = new SellerAgent({
+    signer: createMockSigner(),
+    settlementContract: SETTLEMENT_CONTRACT,
+    chainId: CHAIN_ID,
+    storageAdapter: new MemoryStorageAdapter(),
+    zkTlsAdapter: defaultAdapter,
+    zkTlsAdapters: {
+      "mock-named": namedAdapter
+    }
+  });
+
+  const commitment = commitmentFixture.object;
+  await agent.provenFetch({
+    commitment,
+    callIndex: 0,
+    request: { host: "api.openai.com", path: "/v1/chat/completions", method: "POST" },
+    declaredModel: "gpt-4o-mini",
+    taskNonce: TASK_NONCE
+  });
+
+  assert.ok(defaultAdapter.capturedInput, "default adapter should have received the call");
+  assert.equal(namedAdapter.capturedInput, undefined, "named adapter should NOT have been called");
+});
+
+test("provenFetch rejects unknown provider name", async () => {
+  const agent = new SellerAgent({
+    signer: createMockSigner(),
+    settlementContract: SETTLEMENT_CONTRACT,
+    chainId: CHAIN_ID,
+    storageAdapter: new MemoryStorageAdapter(),
+    zkTlsAdapter: new MockZkTlsAdapter(),
+    zkTlsAdapters: {
+      "mock-a": new MockZkTlsAdapter()
+    }
+  });
+
+  const commitment = commitmentFixture.object;
+  await assert.rejects(
+    () =>
+      agent.provenFetch({
+        commitment,
+        callIndex: 0,
+        request: { host: "api.openai.com", path: "/v1/chat/completions", method: "POST" },
+        declaredModel: "gpt-4o-mini",
+        taskNonce: TASK_NONCE,
+        provider: "nonexistent"
+      }),
+    /Unknown zkTLS provider "nonexistent"/
+  );
+});

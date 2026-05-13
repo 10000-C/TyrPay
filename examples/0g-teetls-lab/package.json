@@ -1,0 +1,24 @@
+{
+  "name": "@tyrpay/0g-teetls-lab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "inspect": "node index.mjs inspect",
+    "live": "node index.mjs live",
+    "test:multi-provider": "tsx test-multi-provider.mts"
+  },
+  "dependencies": {
+    "@0gfoundation/0g-compute-ts-sdk": "^0.8.0",
+    "@tyrpay/buyer-sdk": "workspace:*",
+    "@tyrpay/sdk-core": "workspace:*",
+    "@tyrpay/seller-sdk": "workspace:*",
+    "@tyrpay/storage-adapter": "workspace:*",
+    "@tyrpay/verifier-service": "workspace:*",
+    "@tyrpay/zktls-adapter": "workspace:*",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.16.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.4"
+  }
+}
