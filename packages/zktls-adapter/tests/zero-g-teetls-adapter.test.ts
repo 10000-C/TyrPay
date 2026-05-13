@@ -125,7 +125,7 @@ function createCompletionBody() {
   return {
     id: "chatcmpl-0g-test",
     object: "chat.completion",
-    model: "google/gemma-3-27b-it",
+    model: "gemma-3-27b-it",
     usage: {
       prompt_tokens: 7,
       completion_tokens: 9,
@@ -137,7 +137,8 @@ function createCompletionBody() {
         message: {
           role: "assistant",
           content: "pong"
-        }
+        },
+        logprobs: null
       }
     ]
   };
@@ -162,6 +163,7 @@ test("0G TeeTLS provenFetch builds a raw proof envelope from metadata, response,
   assert.equal(result.rawProof.zeroG.teeSignerAddress, "0x7777777777777777777777777777777777777777");
   assert.deepEqual(result.rawProof.zeroG.requestHeaderKeys, ["Authorization"]);
   assert.equal(result.extracted.model, "google/gemma-3-27b-it");
+  assert.equal((result.rawProof.response.body as { choices: Array<{ logprobs?: unknown }> }).choices[0]?.logprobs, undefined);
   assert.equal(result.extracted.usage.totalTokens, 16);
   assert.equal(result.rawProof.proofHash, hashZeroGTeeTlsRawProofPayload(toZeroGTeeTlsRawProofPayload(result.rawProof)));
   assert.equal(await adapter.verifyRawProof(result.rawProof), true);

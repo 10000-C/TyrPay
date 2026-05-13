@@ -173,10 +173,11 @@ export class ZeroGTeeTlsAdapter
     const responseHeaders = headersToRecord(response.headers);
     const responseText = await response.text();
     const responseBody = parseJson(responseText);
+    const canonicalResponseBody = sanitizeCanonicalJson(responseBody ?? responseText);
     const normalizedResponse = normalizeResponseEvidence({
       status: response.status,
       ...(Object.keys(responseHeaders).length > 0 ? { headers: responseHeaders } : {}),
-      body: responseBody ?? responseText
+      body: canonicalResponseBody
     });
     const extraction = extractOpenAiCompatibleFields(
       normalizedResponse.body,
@@ -253,11 +254,6 @@ export class ZeroGTeeTlsAdapter
         rawProof.extracted.model !== extracted.extracted.model ||
         rawProof.extracted.usage.totalTokens !== extracted.extracted.usage.totalTokens
       ) {
-        return false;
-      }
-
-      const responseModel = extractStringByPath(rawProof.response.body, "model");
-      if (responseModel !== null && responseModel !== rawProof.zeroG.modelFromMetadata) {
         return false;
       }
 
@@ -430,8 +426,7 @@ function extractOpenAiCompatibleFields(
   usageSource: ZeroGUsageSource;
   contentSource: ZeroGContentSource;
 } {
-  const responseModel = extractStringByPath(body, profile.modelPath ?? "model");
-  const model = responseModel ?? metadataModel;
+  const model = metadataModel;
   const usageFromCustomPath = profile.usagePath ? extractNumberByPath(body, profile.usagePath) : null;
   const usageFromStandardPath = extractNumberByPath(body, "usage.total_tokens");
   const usageFromGroqPath = extractNumberByPath(body, "x_groq.usage.total_tokens");
@@ -457,6 +452,26 @@ function extractOpenAiCompatibleFields(
     usageSource: usageFromCustomPath !== null ? "custom" : usageFromStandardPath !== null ? "response.body.usage" : "response.body.x_groq.usage",
     contentSource: customContent !== null ? "custom" : messageContent !== null ? "choices[0].message.content" : "choices[0].delta.content"
   };
+}
+
+function sanitizeCanonicalJson(value: unknown): unknown {
+  if (value === null) {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeCanonicalJson(item)).filter((item) => item !== undefined);
+  }
+
+  if (isPlainRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([key, item]) => [key, sanitizeCanonicalJson(item)] as const)
+        .filter(([, item]) => item !== undefined)
+    );
+  }
+
+  return value;
 }
 
 function extractChatId(headers: { get(name: string): string | null }, body: unknown): string | undefined {
