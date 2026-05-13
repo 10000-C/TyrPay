@@ -47,9 +47,20 @@ export interface ZeroGTeeTlsAdapterConfig {
   signer?: unknown;
   providerAddress?: string;
   defaultRequestPath?: string;
+  providerSelection?: ZeroGProviderSelectionConfig;
   brokerFactory?: ZeroGComputeBrokerFactory;
   fetchImpl?: FetchLike;
   clock?: () => number | bigint | string | Promise<number | bigint | string>;
+}
+
+export interface ZeroGProviderSelectionConfig {
+  enabled?: boolean;
+  fallbackOnUnreachable?: boolean;
+  serviceType?: string;
+  verifiabilityPrefix?: string;
+  model?: string;
+  requireReachableEndpoint?: boolean;
+  probeTimeoutMs?: number;
 }
 
 export type ZeroGComputeBrokerFactory = (input: {
@@ -58,6 +69,7 @@ export type ZeroGComputeBrokerFactory = (input: {
 
 export interface ZeroGComputeBrokerLike {
   inference: {
+    listService?(): Promise<unknown[]>;
     getServiceMetadata(providerAddress: string): Promise<{ endpoint: string; model: string }>;
     getRequestHeaders(providerAddress: string, content?: string): Promise<Record<string, string>>;
     processResponse(providerAddress: string, chatId?: string, content?: string): Promise<boolean | null>;
@@ -78,6 +90,28 @@ export interface ZeroGTeeTlsProvenFetchInput {
   queryContent?: string;
   requestPath?: string;
   responseExtractionProfile?: ZeroGResponseExtractionProfile;
+}
+
+export interface ZeroGTeeTlsPrepareRequestInput {
+  requestBody: Record<string, unknown>;
+  providerAddress?: string;
+  requestPath?: string;
+}
+
+export interface ZeroGTeeTlsPreparedRequest {
+  providerAddress: Address;
+  endpoint: string;
+  model: string;
+  requestPath: string;
+  request: ZkTlsRequestEvidence;
+}
+
+interface ZeroGServiceDescriptor {
+  providerAddress: Address;
+  serviceType: string | null;
+  model: string | null;
+  endpoint: string | null;
+  verifiability: string | null;
 }
 
 export interface ZeroGTeeTlsRawProofPayload {
@@ -133,17 +167,48 @@ export class ZeroGTeeTlsAdapter
 
   constructor(private readonly config: ZeroGTeeTlsAdapterConfig = {}) {}
 
+  async prepareOpenAiRequest(input: ZeroGTeeTlsPrepareRequestInput): Promise<ZeroGTeeTlsPreparedRequest> {
+    const broker = await this.createBroker();
+    const requestPath = input.requestPath ?? this.config.defaultRequestPath ?? DEFAULT_ZERO_G_TEETLS_REQUEST_PATH;
+    const resolved = await this.resolveService({
+      broker,
+      providerAddress: input.providerAddress ?? this.config.providerAddress,
+      requestPath,
+      allowFallback: true
+    });
+    const finalUrlObject = new URL(resolved.endpoint);
+
+    return {
+      providerAddress: resolved.providerAddress,
+      endpoint: resolved.endpoint,
+      model: resolved.serviceMetadata.model,
+      requestPath,
+      request: normalizeRequestEvidence({
+        host: finalUrlObject.host,
+        path: finalUrlObject.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: buildRequestBody(input.requestBody, resolved.serviceMetadata.model)
+      })
+    };
+  }
+
   async provenFetch(
     input: ZeroGTeeTlsProvenFetchInput
   ): Promise<ProvenFetchResult<ZeroGTeeTlsRawProof, ZkTlsResponseEvidence["body"]>> {
-    const providerAddress = normalizeAddress(
-      input.providerAddress ?? this.config.providerAddress ?? "",
-      "providerAddress"
-    );
     const broker = await this.createBroker();
-    const serviceMetadata = await broker.inference.getServiceMetadata(providerAddress);
     const requestPath = input.requestPath ?? this.config.defaultRequestPath ?? DEFAULT_ZERO_G_TEETLS_REQUEST_PATH;
-    const finalUrl = buildFinalUrl(serviceMetadata.endpoint, requestPath);
+    const resolved = await this.resolveService({
+      broker,
+      providerAddress: input.providerAddress ?? this.config.providerAddress,
+      requestPath,
+      allowFallback: this.config.providerSelection?.fallbackOnUnreachable === true
+    });
+    const providerAddress = resolved.providerAddress;
+    const serviceMetadata = resolved.serviceMetadata;
+    const finalUrl = resolved.endpoint;
     const finalUrlObject = new URL(finalUrl);
     const request = normalizeRequestEvidence(input.request);
     assertRequestMatchesResolvedEndpoint(request, finalUrlObject);
@@ -300,6 +365,151 @@ export class ZeroGTeeTlsAdapter
       };
     } catch {
       return null;
+    }
+  }
+
+  private async resolveService(input: {
+    broker: ZeroGComputeBrokerLike;
+    providerAddress?: string;
+    requestPath: string;
+    allowFallback: boolean;
+  }): Promise<{
+    providerAddress: Address;
+    serviceMetadata: { endpoint: string; model: string };
+    endpoint: string;
+  }> {
+    const explicitProviderAddress = input.providerAddress
+      ? normalizeAddress(input.providerAddress, "providerAddress")
+      : null;
+
+    if (explicitProviderAddress) {
+      const explicit = await this.resolveProviderEndpoint(input.broker, explicitProviderAddress, input.requestPath);
+
+      if (await this.shouldAcceptEndpoint(explicit.endpoint)) {
+        return explicit;
+      }
+
+      if (!input.allowFallback) {
+        throw new TypeError(`0G provider endpoint is not reachable: ${explicit.endpoint}`);
+      }
+    }
+
+    if (!this.shouldUseProviderSelection(explicitProviderAddress)) {
+      if (!explicitProviderAddress) {
+        throw new TypeError("ZeroGTeeTlsAdapter requires providerAddress or enabled providerSelection.");
+      }
+
+      return this.resolveProviderEndpoint(input.broker, explicitProviderAddress, input.requestPath);
+    }
+
+    const selected = await this.selectReachableProvider(input.broker, input.requestPath, explicitProviderAddress);
+    if (selected === null) {
+      throw new TypeError("ZeroGTeeTlsAdapter could not find a reachable 0G TeeTLS provider.");
+    }
+
+    return selected;
+  }
+
+  private async resolveProviderEndpoint(
+    broker: ZeroGComputeBrokerLike,
+    providerAddress: Address,
+    requestPath: string
+  ): Promise<{
+    providerAddress: Address;
+    serviceMetadata: { endpoint: string; model: string };
+    endpoint: string;
+  }> {
+    const serviceMetadata = await broker.inference.getServiceMetadata(providerAddress);
+    return {
+      providerAddress,
+      serviceMetadata,
+      endpoint: buildFinalUrl(serviceMetadata.endpoint, requestPath)
+    };
+  }
+
+  private async selectReachableProvider(
+    broker: ZeroGComputeBrokerLike,
+    requestPath: string,
+    excludedProviderAddress: Address | null
+  ): Promise<{
+    providerAddress: Address;
+    serviceMetadata: { endpoint: string; model: string };
+    endpoint: string;
+  } | null> {
+    if (typeof broker.inference.listService !== "function") {
+      throw new TypeError("0G providerSelection requires broker.inference.listService.");
+    }
+
+    const candidates = (await broker.inference.listService())
+      .map(normalizeServiceDescriptor)
+      .filter((service): service is ZeroGServiceDescriptor => service !== null)
+      .filter((service) => service.providerAddress !== excludedProviderAddress)
+      .filter((service) => this.matchesProviderSelection(service));
+
+    for (const candidate of candidates) {
+      const resolved = await this.resolveProviderEndpoint(broker, candidate.providerAddress, requestPath);
+
+      if (await this.shouldAcceptEndpoint(resolved.endpoint)) {
+        return resolved;
+      }
+    }
+
+    return null;
+  }
+
+  private matchesProviderSelection(service: ZeroGServiceDescriptor): boolean {
+    const selection = this.config.providerSelection;
+    const serviceType = selection?.serviceType ?? "chatbot";
+    const verifiabilityPrefix = selection?.verifiabilityPrefix ?? "Tee";
+
+    if (service.serviceType !== null && service.serviceType !== serviceType) {
+      return false;
+    }
+
+    if (service.verifiability !== null && !service.verifiability.startsWith(verifiabilityPrefix)) {
+      return false;
+    }
+
+    if (selection?.model && service.model !== null && service.model !== selection.model) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private shouldUseProviderSelection(explicitProviderAddress: Address | null): boolean {
+    const enabled = this.config.providerSelection?.enabled;
+    return enabled === true || (enabled !== false && explicitProviderAddress === null);
+  }
+
+  private async shouldAcceptEndpoint(endpoint: string): Promise<boolean> {
+    const requireReachableEndpoint = this.config.providerSelection?.requireReachableEndpoint;
+    if (requireReachableEndpoint === false) {
+      return true;
+    }
+
+    return this.probeEndpoint(endpoint);
+  }
+
+  private async probeEndpoint(endpoint: string): Promise<boolean> {
+    const fetchImpl = this.config.fetchImpl ?? globalThis.fetch;
+
+    if (typeof fetchImpl !== "function") {
+      return true;
+    }
+
+    const timeoutMs = this.config.providerSelection?.probeTimeoutMs ?? 5_000;
+
+    try {
+      await Promise.race([
+        fetchImpl(endpoint, { method: "GET" }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("0G endpoint probe timed out.")), timeoutMs);
+        })
+      ]);
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -474,6 +684,32 @@ function sanitizeCanonicalJson(value: unknown): unknown {
   return value;
 }
 
+function normalizeServiceDescriptor(value: unknown): ZeroGServiceDescriptor | null {
+  if (!isPlainRecord(value) && !Array.isArray(value)) {
+    return null;
+  }
+
+  const providerAddress = readFirstString(value, [
+    "provider",
+    "providerAddress",
+    "provider_addr",
+    "address",
+    "0"
+  ]);
+
+  if (providerAddress === null) {
+    return null;
+  }
+
+  return {
+    providerAddress: normalizeAddress(providerAddress, "service.providerAddress"),
+    serviceType: readFirstString(value, ["serviceType", "service_type", "type", "1"]),
+    model: readFirstString(value, ["model", "3"]),
+    endpoint: readFirstString(value, ["url", "endpoint", "2"]),
+    verifiability: readFirstString(value, ["verifiability", "verificationMode", "teeType", "10"])
+  };
+}
+
 function extractChatId(headers: { get(name: string): string | null }, body: unknown): string | undefined {
   const headerChatId = headers.get("zg-res-key");
   if (headerChatId && headerChatId.length > 0) {
@@ -626,6 +862,18 @@ function readPath(value: unknown, path: string): unknown {
 
     return undefined;
   }, value);
+}
+
+function readFirstString(value: unknown, paths: string[]): string | null {
+  for (const path of paths) {
+    const found = readPath(value, path);
+
+    if (typeof found === "string" && found.length > 0) {
+      return found;
+    }
+  }
+
+  return null;
 }
 
 function assertPlainRecord(value: unknown, fieldName: string): Record<string, unknown> {

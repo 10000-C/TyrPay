@@ -38,10 +38,22 @@ class FakeHeaders {
 class FakeZeroGBroker implements ZeroGComputeBrokerLike {
   readonly calls: Array<{ method: string; args: unknown[] }> = [];
   processResponseResult: boolean | null = true;
+  services: unknown[] = [];
+  metadataByProvider = new Map<string, { endpoint: string; model: string }>();
 
   inference = {
+    listService: async () => {
+      this.calls.push({ method: "listService", args: [] });
+      return this.services;
+    },
     getServiceMetadata: async (providerAddress: string) => {
       this.calls.push({ method: "getServiceMetadata", args: [providerAddress] });
+      const configured = this.metadataByProvider.get(providerAddress);
+
+      if (configured) {
+        return configured;
+      }
+
       return {
         endpoint: "https://compute-network-test.0g.ai/v1/proxy",
         model: "google/gemma-3-27b-it"
@@ -115,6 +127,31 @@ function createFetch(body: unknown = createCompletionBody()) {
         "zg-res-key": "chat-0g-test"
       }),
       text: async () => JSON.stringify(body)
+    };
+  };
+
+  return { fetchImpl, calls };
+}
+
+function createProbeAwareFetch(input: {
+  unreachableHost: string;
+  body?: unknown;
+}) {
+  const calls: Array<{ url: string; init: { method?: string } | undefined }> = [];
+  const fetchImpl = async (url: string, init?: { method?: string }) => {
+    calls.push({ url, init });
+
+    if (init?.method === "GET" && url.includes(input.unreachableHost)) {
+      throw new Error("TLS handshake failed");
+    }
+
+    return {
+      status: init?.method === "GET" ? 400 : 200,
+      headers: new FakeHeaders({
+        "content-type": "application/json",
+        "zg-res-key": "chat-0g-test"
+      }),
+      text: async () => JSON.stringify(input.body ?? createCompletionBody())
     };
   };
 
@@ -274,4 +311,125 @@ test("0G TeeTLS provenFetch rejects requests that do not match resolved 0G endpo
       }),
     /request.host/
   );
+});
+
+test("0G TeeTLS prepareOpenAiRequest selects a reachable chatbot provider", async () => {
+  const staleProviderAddress = "0x9999999999999999999999999999999999999999";
+  const reachableProviderAddress = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const broker = new FakeZeroGBroker();
+  broker.services = [
+    {
+      provider: staleProviderAddress,
+      serviceType: "chatbot",
+      model: "stale-model",
+      url: "https://compute-network-stale.0g.ai",
+      verifiability: "TeeML"
+    },
+    {
+      provider: reachableProviderAddress,
+      serviceType: "chatbot",
+      model: "qwen/qwen-2.5-7b-instruct",
+      url: "https://compute-network-live.0g.ai",
+      verifiability: "TeeML"
+    }
+  ];
+  broker.metadataByProvider.set(staleProviderAddress, {
+    endpoint: "https://compute-network-stale.0g.ai/v1/proxy",
+    model: "stale-model"
+  });
+  broker.metadataByProvider.set(reachableProviderAddress, {
+    endpoint: "https://compute-network-live.0g.ai/v1/proxy",
+    model: "qwen/qwen-2.5-7b-instruct"
+  });
+  const { fetchImpl, calls } = createProbeAwareFetch({
+    unreachableHost: "compute-network-stale.0g.ai"
+  });
+  const adapter = new ZeroGTeeTlsAdapter({
+    brokerFactory: () => broker,
+    fetchImpl,
+    clock: () => "1735686000000"
+  });
+
+  const prepared = await adapter.prepareOpenAiRequest({
+    requestBody: {
+      model: "ignored-client-model",
+      messages: [{ role: "user", content: "ping" }]
+    }
+  });
+
+  assert.equal(prepared.providerAddress, reachableProviderAddress);
+  assert.equal(prepared.endpoint, "https://compute-network-live.0g.ai/v1/proxy/chat/completions");
+  assert.equal(prepared.model, "qwen/qwen-2.5-7b-instruct");
+  assert.equal(prepared.request.host, "compute-network-live.0g.ai");
+  assert.equal(prepared.request.path, "/v1/proxy/chat/completions");
+  assert.equal((prepared.request.body as { model: string }).model, "qwen/qwen-2.5-7b-instruct");
+  assert.deepEqual(broker.calls.map((call) => call.method), [
+    "listService",
+    "getServiceMetadata",
+    "getServiceMetadata"
+  ]);
+  assert.deepEqual(
+    calls.map((call) => [call.url, call.init?.method]),
+    [
+      ["https://compute-network-stale.0g.ai/v1/proxy/chat/completions", "GET"],
+      ["https://compute-network-live.0g.ai/v1/proxy/chat/completions", "GET"]
+    ]
+  );
+});
+
+test("0G TeeTLS provenFetch can fallback from an unreachable configured provider", async () => {
+  const staleProviderAddress = "0x9999999999999999999999999999999999999999";
+  const reachableProviderAddress = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const broker = new FakeZeroGBroker();
+  broker.services = [
+    {
+      provider: reachableProviderAddress,
+      serviceType: "chatbot",
+      model: "qwen/qwen-2.5-7b-instruct",
+      url: "https://compute-network-live.0g.ai",
+      verifiability: "TeeML"
+    }
+  ];
+  broker.metadataByProvider.set(staleProviderAddress, {
+    endpoint: "https://compute-network-stale.0g.ai/v1/proxy",
+    model: "stale-model"
+  });
+  broker.metadataByProvider.set(reachableProviderAddress, {
+    endpoint: "https://compute-network-live.0g.ai/v1/proxy",
+    model: "qwen/qwen-2.5-7b-instruct"
+  });
+  const { fetchImpl } = createProbeAwareFetch({
+    unreachableHost: "compute-network-stale.0g.ai"
+  });
+  const adapter = new ZeroGTeeTlsAdapter({
+    providerAddress: staleProviderAddress,
+    providerSelection: {
+      enabled: true,
+      fallbackOnUnreachable: true
+    },
+    brokerFactory: () => broker,
+    fetchImpl,
+    clock: () => "1735686000000"
+  });
+  const input = createBaseInput();
+
+  const result = await adapter.provenFetch({
+    ...input,
+    providerAddress: undefined,
+    declaredModel: "qwen/qwen-2.5-7b-instruct",
+    request: {
+      ...input.request,
+      host: "compute-network-live.0g.ai",
+      path: "/v1/proxy/chat/completions",
+      body: {
+        model: "client-model",
+        messages: [{ role: "user", content: "ping" }]
+      }
+    }
+  });
+
+  assert.equal(result.rawProof.zeroG.providerAddress, reachableProviderAddress);
+  assert.equal(result.rawProof.zeroG.endpoint, "https://compute-network-live.0g.ai/v1/proxy/chat/completions");
+  assert.equal(result.extracted.model, "qwen/qwen-2.5-7b-instruct");
+  assert.equal(await adapter.verifyRawProof(result.rawProof), true);
 });
