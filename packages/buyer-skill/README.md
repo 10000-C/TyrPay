@@ -7,15 +7,17 @@ an agent can pass directly to Claude-style or OpenAI-style tool calling.
 
 ## What This Package Exports
 
-- `createBuyerTools(sdk)`: returns four buyer-side tools
+- `createBuyerTools(sdk)`: returns six buyer-side tools
 - `BuyerTool`: the shared tool shape used by this package
 
 Tool names:
 
 - `tyrpay_post_task`
+- `tyrpay_fund_task`
 - `tyrpay_check_task`
 - `tyrpay_refund_task`
 - `tyrpay_list_tasks`
+- `tyrpay_ready`
 
 ## Installation
 
@@ -31,13 +33,12 @@ You must configure `BuyerSdk` first.
 Typical buyer-side flow:
 
 1. Configure `BuyerSdk` with a signer, settlement contract address, and storage adapter.
-2. Call `tyrpay_post_task` to create the task intent.
-3. The tool waits for the seller to submit a commitment.
-4. The tool validates the submitted commitment against any buyer expectations you passed.
-5. The tool funds the task on-chain.
-6. Share the returned `taskId` with the seller through your own application or messaging layer.
-7. Later, use `tyrpay_check_task` or `tyrpay_list_tasks` to monitor progress with both raw protocol status and buyer-facing status fields.
-8. If the seller or verifier misses a protocol deadline, use `tyrpay_refund_task`.
+2. Call `tyrpay_ready` once to verify signer and provider connectivity.
+3. Call `tyrpay_post_task` to create the task intent.
+4. Either let `tyrpay_post_task` auto-wait and auto-fund, or set `createOnly: true` and call `tyrpay_fund_task` later.
+5. Share the returned `taskId` with the seller through your own application or messaging layer.
+6. Use `tyrpay_check_task` or `tyrpay_list_tasks` to monitor progress with both raw protocol status and buyer-facing status fields.
+7. If the seller or verifier misses a protocol deadline, use `tyrpay_refund_task`.
 
 `buyer-skill` does not notify the seller for you. Buyer/seller coordination is
 an application responsibility outside this package.
@@ -118,6 +119,7 @@ const result = await tool.execute({
   token: "0x2222222222222222222222222222222222222222",
   amount: "1000000",
   deadline: "1760000000000",
+  createOnly: true,
   expectations: {
     acceptedHosts: ["api.openai.com"],
     acceptedPaths: ["/v1/chat/completions"],
@@ -132,25 +134,46 @@ const result = await tool.execute({
 
 ### `tyrpay_post_task`
 
-Complete buyer happy-path orchestration in one tool call:
+Create a task intent and optionally continue all the way to funding.
 
 1. create the task intent on-chain
-2. wait for seller commitment submission
-3. validate the commitment against buyer expectations
-4. fund the task
+2. optionally wait for seller commitment submission
+3. optionally validate the commitment against buyer expectations
+4. optionally fund the task
 
 Use this as the primary buyer entrypoint when the agent is creating a new task.
+Set `createOnly: true` when you need a non-blocking flow and want funding to be a separate explicit step.
 
 Returns:
 
 - `taskId`: on-chain task identifier
 - `taskNonce`: on-chain task nonce assigned at task creation
 - `createTxHash`: transaction hash for `createTaskIntent`
-- `fundTxHash`: transaction hash for `fundTask`
-- `commitmentHash`: seller commitment hash accepted by the buyer flow
-- `commitmentURI`: seller commitment URI accepted by the buyer flow
-- `userStatus`: buyer-facing status, currently `IN_PROGRESS`
+- `fundTxHash`: transaction hash for `fundTask` when funding happened in this call
+- `commitmentHash`: seller commitment hash accepted by the buyer flow when available
+- `commitmentURI`: seller commitment URI accepted by the buyer flow when available
+- `timedOut`: `true` when the task was created but the seller did not respond before the wait window ended
+- `userStatus`: buyer-facing status, either `WAITING_FOR_SELLER` or `IN_PROGRESS`
 - `userMessage`: buyer-facing explanation of what happens next
+
+### `tyrpay_fund_task`
+
+Manual funding step for tasks that already have a submitted commitment.
+
+Use this when:
+
+- `tyrpay_post_task` was called with `createOnly: true`
+- `tyrpay_post_task` returned `timedOut: true`
+- the agent wants explicit control over when payment is locked
+
+Returns:
+
+- `taskId`: funded task identifier
+- `fundTxHash`: transaction hash for `fundTask`
+- `commitmentHash`: seller commitment hash that passed validation
+- `commitmentURI`: seller commitment URI that passed validation
+- `userStatus`: `IN_PROGRESS`
+- `userMessage`: buyer-facing explanation that execution can begin
 
 ### `tyrpay_check_task`
 
@@ -159,6 +182,8 @@ Returns the current on-chain task plus both machine-friendly and buyer-facing st
 Derived protocol statuses currently exposed:
 
 - `EXECUTING`
+- `VERIFIED_PASS`
+- `VERIFIED_FAIL`
 - `EXPIRED`
 
 Buyer-facing statuses currently exposed:
@@ -170,6 +195,8 @@ Buyer-facing statuses currently exposed:
 - `COMPLETED`
 - `REFUNDED`
 - `EXPIRED`
+- `VERIFIED_PASS`
+- `VERIFIED_FAIL`
 
 Returns:
 
@@ -200,9 +227,21 @@ Returns:
 - an array of task records in the same order as the input `taskIds`
 - each record contains all normalized task fields plus `derivedStatus`, `userStatus`, and `userMessage`
 
+### `tyrpay_ready`
+
+Readiness check for buyer-side agent wiring.
+
+Returns:
+
+- `ok`: always `true` when the check succeeds
+- `signerAddress`: buyer signer address in use
+- `userStatus`: `READY`
+- `userMessage`: confirmation that signer and provider are reachable
+
 ## Notes For Agent Authors
 
-- `tyrpay_post_task` already performs `validateCommitment` before funding.
+- Runtime validation rejects malformed tool arguments before they hit ethers or the SDK.
+- Tool failures throw `BuyerSkillToolError` with `code`, `field`, `suggestion`, and `retryable` metadata.
 - Pass buyer-side expectations whenever the upstream API, method, model, or
   verifier must be constrained.
 - `deadline` is the execution deadline in Unix milliseconds, not a human string.
