@@ -14,8 +14,10 @@ export interface SellerConfig {
   chainId: UIntLike;
   /** Storage adapter for uploading proof bundles */
   storageAdapter: StorageAdapter;
-  /** zkTLS adapter for proven fetches */
+  /** Default zkTLS adapter for proven fetches */
   zkTlsAdapter: ZkTlsAdapter;
+  /** Named adapters for multi-provider selection via ProvenFetchInput.provider */
+  zkTlsAdapters?: Record<string, ZkTlsAdapter>;
 }
 
 /**
