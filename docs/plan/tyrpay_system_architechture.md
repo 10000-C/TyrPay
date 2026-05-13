@@ -440,6 +440,66 @@ task.status = report.passed ? SETTLED : REFUNDED;
 方案 B：将 taskNonce 派生出的 callIntentHash 注入 HTTP transcript；或
 方案 C：使用 TEE executor 将 nonce 与上游调用绑定。
 
+8.5 M10：0G TeeTLS Adapter
+
+M10 将 0G Compute TeeTLS 作为 `ZkTlsAdapter` 的一个具体 provider，而不是替换 Verifier 或 Settlement Contract。
+
+实验结论：
+
+1. 0G Compute SDK 的 `getServiceMetadata(providerAddress)` 可以返回模型端点和 model；
+2. `getRequestHeaders(providerAddress, content)` 生成调用所需的 0G 计费 / 授权 header；
+3. `processResponse(providerAddress, chatId, content)` 返回响应验证结果，但当前高层 SDK 不暴露稳定的 `TeeTLSProof` 原生对象；
+4. usage 不由 0G metadata 直接返回，必须从 OpenAI-compatible response body 中提取，例如 `usage.total_tokens`；
+5. live 调用依赖 0G inference ledger、provider acknowledgement 与 provider sub-account 余额。
+
+因此，TyrPay 的 0G TeeTLS adapter 应采用 envelope 模式：把 0G 调用结果、response、`chatId`、`processResponse` 结果和 TyrPay `proofContext` 一起封装为 `ZeroGTeeTlsRawProof`，再归一化为标准 `DeliveryReceipt`。
+
+推荐 raw proof envelope：
+
+```ts
+interface ZeroGTeeTlsRawProof {
+  proofSchemaVersion: "TyrPay.0g-teetls-proof.v1";
+  provider: "0g-teetls";
+  providerProofId: string;
+  proofContext: ProviderProofContext;
+  request: ZkTlsRequestEvidence;
+  response: ZkTlsResponseEvidence;
+  observedAt: UnixMillis;
+  extracted: ExtractedReceiptFields;
+  zeroG: {
+    providerAddress: Address;
+    endpoint: string;
+    modelFromMetadata: string;
+    requestHeaderKeys: string[];
+    chatId?: string;
+    processResponseResult: boolean | null;
+    teeSignerAddress?: Address;
+    signerAcknowledged?: boolean;
+  };
+  metadata: {
+    sdkPackage: "@0gfoundation/0g-compute-ts-sdk";
+    requestPath: string;
+    usageSource: "response.body.usage" | "response.body.x_groq.usage" | "custom";
+    contentSource: "choices[0].message.content" | "choices[0].delta.content" | "custom";
+  };
+  proofHash: Bytes32;
+}
+```
+
+M10 的 Verifier 检查要求：
+
+1. `proofHash` 与 canonical raw proof payload 一致；
+2. `processResponseResult === true`；
+3. `endpoint` 与 commitment target 一致；
+4. `modelFromMetadata` 与 declared/allowed model 一致，若 response body 中存在 `model` 字段也必须一致；
+5. `usage.totalTokens` 可从 response body 提取，且满足 commitment；
+6. `proofContext` 与链上 task context 一致；
+7. `providerProofId` / `responseHash` / `callIntentHash` 未被消费。
+
+安全边界：
+
+0G TeeTLS 证明的是 provider response 的可信来源；TyrPay 仍负责 task binding、proof consumption、履约判定和 EIP-712 Verification Report 签名。除非 0G 后续提供可将 `taskNonce` 或 `callIntentHash` 写入 TeeTLS 签名对象的接口，M10 不应声明 request-level nonce binding。
+
 
 9. MCP 与 Skill
 
@@ -542,6 +602,7 @@ Settlement Contract
 Centralized Verifier
 0G Storage Adapter
 zkTLS Provider Adapter
+0G TeeTLS Adapter（作为可选 zkTLS provider）
 OpenAI-compatible model API support
 proof-level context binding
 proof consumption registry
@@ -575,4 +636,4 @@ Storage 负责证据保存；
 Verifier 负责履约判断；
 Contracts 负责状态与资金结算。
 
-该分层使 TyrPay 能够在 Phase 1 中快速实现可信闭环，并为后续引入 DAO 聚合签名、0G Compute 验证、多 Verifier 机制、request-level task binding 和 proof-based reputation layer 保留演进空间。
+该分层使 TyrPay 能够在 Phase 1 中快速实现可信闭环，并为后续引入 DAO 聚合签名、0G Compute verifier、多 Verifier 机制、request-level task binding 和 proof-based reputation layer 保留演进空间。M10 只把 0G TeeTLS 引入证据采集层，不改变 Verifier 的最终裁决职责。
