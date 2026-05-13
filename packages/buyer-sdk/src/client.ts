@@ -221,7 +221,9 @@ export class BuyerSdk {
 
   async fundTask(taskId: string, options: FundTaskOptions = {}): Promise<TransactionReceipt> {
     const normalizedTaskId = normalizeBytes32(taskId, "taskId");
-    await this.validateCommitment(normalizedTaskId, options.validateCommitment ?? {});
+    if (!options.skipValidation) {
+      await this.validateCommitment(normalizedTaskId, options.validateCommitment ?? {});
+    }
 
     const tx = await this.contract.fundTask(normalizedTaskId);
     return waitForReceipt(tx);
@@ -246,6 +248,14 @@ export class BuyerSdk {
 
     if (task.status === "FUNDED") {
       return "EXECUTING";
+    }
+
+    if (task.status === "PROOF_SUBMITTED" && task.reportHash && this.config.reportResolver) {
+      const reportRecord = await this.getReport(task.taskId);
+
+      if (reportRecord.report) {
+        return reportRecord.report.passed ? "VERIFIED_PASS" : "VERIFIED_FAIL";
+      }
     }
 
     return task.status;
@@ -305,6 +315,21 @@ export class BuyerSdk {
       currentTimeMs: currentTimeMs.toString(),
       proofSubmissionGracePeriodMs: proofSubmissionGracePeriodMs.toString(),
       verificationTimeoutMs: verificationTimeoutMs.toString()
+    };
+  }
+
+  async ready(): Promise<import("./types.js").BuyerSdkReadyStatus> {
+    const signerAddress = await this.getSignerAddress();
+    const network = await this.config.signer.provider?.getNetwork();
+
+    if (!network) {
+      throw new BuyerSdkConfigurationError("BuyerSdk signer must be connected to a provider.");
+    }
+
+    return {
+      signerAddress,
+      chainId: normalizeUIntString(network.chainId, "chainId"),
+      settlementAddress: this.settlementAddress
     };
   }
 

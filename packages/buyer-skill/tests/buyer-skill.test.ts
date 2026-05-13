@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import type { DerivedTaskStatus } from "@tyrpay/sdk-core";
 import { BuyerSkillToolError, createBuyerTools } from "../src/index.js";
 import type { FundTaskResult, PostTaskResult } from "../src/index.js";
 
@@ -11,6 +12,7 @@ const TOKEN = "0x2222222222222222222222222222222222222222";
 const COMMITMENT_HASH = "0x" + "c".repeat(64);
 
 function createMockSdk() {
+  let validateCount = 0;
   const signer = {
     getAddress: async () => "0x3333333333333333333333333333333333333333",
     provider: {
@@ -49,10 +51,18 @@ function createMockSdk() {
         statusCode: 1
       };
     },
-    async getTaskStatus() {
-      return "COMMITMENT_SUBMITTED" as const;
+    async getTaskStatus(): Promise<DerivedTaskStatus> {
+      return "COMMITMENT_SUBMITTED";
+    },
+    async ready() {
+      return {
+        signerAddress: "0x3333333333333333333333333333333333333333",
+        chainId: "31337",
+        settlementAddress: "0x4444444444444444444444444444444444444444"
+      };
     },
     async validateCommitment() {
+      validateCount += 1;
       return {
         task: await this.getTask(),
         commitmentHash: COMMITMENT_HASH,
@@ -72,12 +82,15 @@ function createMockSdk() {
     }
   };
 
-  return sdk;
+  return {
+    sdk,
+    getValidateCount: () => validateCount
+  };
 }
 
 describe("buyer-skill", () => {
   it("wraps invalid post_task input as BuyerSkillToolError", async () => {
-    const tool = createBuyerTools(createMockSdk() as never).find((entry) => entry.name === "tyrpay_post_task");
+    const tool = createBuyerTools(createMockSdk().sdk as never).find((entry) => entry.name === "tyrpay_post_task");
 
     assert.ok(tool);
 
@@ -100,7 +113,7 @@ describe("buyer-skill", () => {
   });
 
   it("supports createOnly flow without funding", async () => {
-    const tool = createBuyerTools(createMockSdk() as never).find((entry) => entry.name === "tyrpay_post_task");
+    const tool = createBuyerTools(createMockSdk().sdk as never).find((entry) => entry.name === "tyrpay_post_task");
 
     assert.ok(tool);
 
@@ -117,17 +130,19 @@ describe("buyer-skill", () => {
   });
 
   it("exposes manual funding as a separate tool", async () => {
-    const tool = createBuyerTools(createMockSdk() as never).find((entry) => entry.name === "tyrpay_fund_task");
+    const { sdk, getValidateCount } = createMockSdk();
+    const tool = createBuyerTools(sdk as never).find((entry) => entry.name === "tyrpay_fund_task");
 
     assert.ok(tool);
 
     const result = (await tool.execute({ taskId: TASK_ID })) as FundTaskResult;
     assert.equal(result.fundTxHash, "0xfund");
     assert.equal(result.userStatus, "IN_PROGRESS");
+    assert.equal(getValidateCount(), 1);
   });
 
   it("rejects list_tasks requests beyond the declared batch size", async () => {
-    const tool = createBuyerTools(createMockSdk() as never).find((entry) => entry.name === "tyrpay_list_tasks");
+    const tool = createBuyerTools(createMockSdk().sdk as never).find((entry) => entry.name === "tyrpay_list_tasks");
 
     assert.ok(tool);
 
@@ -142,5 +157,16 @@ describe("buyer-skill", () => {
         return true;
       }
     );
+  });
+
+  it("maps VERIFIED_PASS into a buyer-facing verification status", async () => {
+    const { sdk } = createMockSdk();
+    sdk.getTaskStatus = async () => "VERIFIED_PASS" as const;
+    const tool = createBuyerTools(sdk as never).find((entry) => entry.name === "tyrpay_check_task");
+
+    assert.ok(tool);
+
+    const result = await tool.execute({ taskId: TASK_ID });
+    assert.equal((result as { userStatus: string }).userStatus, "VERIFIED_PASS");
   });
 });

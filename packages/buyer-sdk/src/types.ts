@@ -77,6 +77,7 @@ export interface ValidatedCommitment extends CommitmentRecord {
 
 export interface FundTaskOptions {
   validateCommitment?: CommitmentExpectations;
+  skipValidation?: boolean;
 }
 
 export interface VerificationReportResolver {
@@ -100,6 +101,12 @@ export interface ContractTiming {
   currentTimeMs: UIntString;
   proofSubmissionGracePeriodMs: UIntString;
   verificationTimeoutMs: UIntString;
+}
+
+export interface BuyerSdkReadyStatus {
+  signerAddress: Address;
+  chainId: UIntString;
+  settlementAddress: Address;
 }
 
 export class BuyerSdkConfigurationError extends Error {
