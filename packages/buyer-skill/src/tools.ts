@@ -1,14 +1,37 @@
-import type { BuyerSdk, CommitmentExpectations } from "@tyrpay/buyer-sdk";
-import type { BuyerTool } from "./types.js";
+import type { BuyerSdk } from "@tyrpay/buyer-sdk";
+import { BuyerSkillToolError, wrapBuyerSkillError } from "./errors.js";
+import type {
+  BuyerStatusView,
+  BuyerTaskStatusResult,
+  BuyerTool,
+  CheckTaskInput,
+  FundTaskInput,
+  FundTaskResult,
+  ListTasksInput,
+  ListTasksResult,
+  PostTaskInput,
+  PostTaskResult,
+  ReadyResult,
+  RefundTaskInput,
+  RefundTaskResult
+} from "./types.js";
+import {
+  validateCheckTaskInput,
+  validateFundTaskInput,
+  validateListTasksInput,
+  validatePostTaskInput,
+  validateRefundTaskInput
+} from "./validation.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_TIMEOUT_MS = 600_000;
+const MAX_LIST_TASKS = 20;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function mapBuyerUserStatus(task: { status?: string }, derivedStatus: string) {
+function mapBuyerUserStatus(task: { status?: string }, derivedStatus: string): BuyerStatusView {
   if (derivedStatus === "EXPIRED") {
     return {
       userStatus: "EXPIRED",
@@ -60,13 +83,15 @@ function mapBuyerUserStatus(task: { status?: string }, derivedStatus: string) {
 export function createBuyerTools(sdk: BuyerSdk): BuyerTool[] {
   return [
     postTaskTool(sdk),
+    fundTaskTool(sdk),
     checkTaskTool(sdk),
     refundTaskTool(sdk),
-    listTasksTool(sdk)
+    listTasksTool(sdk),
+    readyTool(sdk)
   ];
 }
 
-function postTaskTool(sdk: BuyerSdk): BuyerTool {
+function postTaskTool(sdk: BuyerSdk): BuyerTool<PostTaskResult> {
   return {
     name: "tyrpay_post_task",
     description:
@@ -111,64 +136,132 @@ function postTaskTool(sdk: BuyerSdk): BuyerTool {
       additionalProperties: false
     },
     async execute(input: unknown) {
-      const i = input as {
-        seller: string;
-        token: string;
-        amount: string;
-        deadline: string;
-        metadataHash?: string;
-        metadataURI?: string;
-        expectations?: CommitmentExpectations;
-        pollIntervalMs?: number;
-        timeoutMs?: number;
-      };
-
-      const created = await sdk.createTaskIntent({
-        seller: i.seller,
-        token: i.token,
-        amount: i.amount,
-        deadline: i.deadline,
-        ...(i.metadataHash ? { metadataHash: i.metadataHash } : {}),
-        ...(i.metadataURI ? { metadataURI: i.metadataURI } : {})
-      });
-      const { taskId, taskNonce } = created;
-
-      const pollInterval = i.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-      const totalTimeout = i.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-      const waitDeadline = Date.now() + totalTimeout;
-
-      while (true) {
-        const task = await sdk.getTask(taskId);
-        if (task.commitmentHash) break;
-
-        const remaining = waitDeadline - Date.now();
-        if (remaining <= pollInterval) {
-          throw new Error(
-            `Timed out after ${totalTimeout}ms waiting for the seller to respond on task ${taskId}. ` +
-              "The task was created, but no payment was locked. Call tyrpay_check_task to monitor or decide whether to retry later."
-          );
-        }
-        await sleep(pollInterval);
+      try {
+        const i = validatePostTaskInput(input);
+        return await executePostTask(sdk, i);
+      } catch (error) {
+        throw wrapBuyerSkillError(error);
       }
-
-      const validated = await sdk.validateCommitment(taskId, i.expectations);
-      const fundReceipt = await sdk.fundTask(taskId, { validateCommitment: i.expectations });
-
-      return {
-        taskId,
-        taskNonce,
-        createTxHash: created.receipt.hash,
-        fundTxHash: fundReceipt.hash,
-        commitmentHash: validated.commitmentHash,
-        commitmentURI: validated.commitmentURI,
-        userStatus: "IN_PROGRESS",
-        userMessage: "Payment is locked and the seller can now execute the task."
-      };
     }
   };
 }
 
-function checkTaskTool(sdk: BuyerSdk): BuyerTool {
+async function executePostTask(sdk: BuyerSdk, input: PostTaskInput): Promise<PostTaskResult> {
+  const created = await sdk.createTaskIntent({
+    seller: input.seller,
+    token: input.token,
+    amount: input.amount,
+    deadline: input.deadline,
+    ...(input.metadataHash ? { metadataHash: input.metadataHash } : {}),
+    ...(input.metadataURI ? { metadataURI: input.metadataURI } : {})
+  });
+  const { taskId, taskNonce } = created;
+
+  if (input.createOnly) {
+    return {
+      taskId,
+      taskNonce,
+      createTxHash: created.receipt.hash,
+      userStatus: "WAITING_FOR_SELLER",
+      userMessage: "The task was created. Wait for the seller response, then call tyrpay_fund_task when you are ready to lock payment."
+    };
+  }
+
+  const pollInterval = input.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+  const totalTimeout = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const waitDeadline = Date.now() + totalTimeout;
+
+  while (true) {
+    const task = await sdk.getTask(taskId);
+    if (task.commitmentHash && task.commitmentURI) {
+      const fundResult = await executeFundTask(sdk, {
+        taskId,
+        ...(input.expectations ? { expectations: input.expectations } : {})
+      });
+      return {
+        taskId,
+        taskNonce,
+        createTxHash: created.receipt.hash,
+        fundTxHash: fundResult.fundTxHash,
+        commitmentHash: fundResult.commitmentHash,
+        commitmentURI: fundResult.commitmentURI,
+        userStatus: fundResult.userStatus,
+        userMessage: fundResult.userMessage
+      };
+    }
+
+    if (Date.now() >= waitDeadline) {
+      return {
+        taskId,
+        taskNonce,
+        createTxHash: created.receipt.hash,
+        commitmentHash: task.commitmentHash,
+        commitmentURI: task.commitmentURI,
+        timedOut: true,
+        userStatus: "WAITING_FOR_SELLER",
+        userMessage: "The task was created, but the seller did not respond before the wait window ended. Use tyrpay_check_task to monitor it or tyrpay_fund_task once the commitment appears."
+      };
+    }
+
+    await sleep(withJitter(pollInterval));
+  }
+}
+
+function fundTaskTool(sdk: BuyerSdk): BuyerTool<FundTaskResult> {
+  return {
+    name: "tyrpay_fund_task",
+    description:
+      "Fund a TyrPay task after the seller has submitted a commitment. " +
+      "Use this when you created a task with createOnly=true, when tyrpay_post_task timed out, or when you want funding to be a separate explicit step.",
+    inputSchema: {
+      type: "object",
+      required: ["taskId"],
+      properties: {
+        taskId: { type: "string", description: "The bytes32 task ID to fund" },
+        expectations: {
+          type: "object",
+          description: "Optional commitment validation constraints to enforce before payment is locked.",
+          properties: {
+            acceptedHosts: { type: "array", items: { type: "string" }, description: "Allowed API hosts" },
+            acceptedPaths: { type: "array", items: { type: "string" }, description: "Allowed API paths" },
+            acceptedMethods: { type: "array", items: { type: "string" }, description: "Allowed HTTP methods" },
+            acceptedModels: { type: "array", items: { type: "string" }, description: "Allowed AI model names" },
+            expectedVerifier: { type: "string", description: "Required verifier address" },
+            minTotalTokens: { type: "number", description: "Minimum required minUsage.totalTokens" },
+            requireNonZeroMinUsage: { type: "boolean" },
+            nowMs: { type: "string", description: "Optional current time as Unix milliseconds string for deadline enforcement" }
+          },
+          additionalProperties: false
+        }
+      },
+      additionalProperties: false
+    },
+    async execute(input: unknown) {
+      try {
+        const i = validateFundTaskInput(input);
+        return await executeFundTask(sdk, i);
+      } catch (error) {
+        throw wrapBuyerSkillError(error);
+      }
+    }
+  };
+}
+
+async function executeFundTask(sdk: BuyerSdk, input: FundTaskInput): Promise<FundTaskResult> {
+  const validated = await sdk.validateCommitment(input.taskId, input.expectations);
+  const fundReceipt = await sdk.fundTask(input.taskId, { validateCommitment: input.expectations });
+
+  return {
+    taskId: input.taskId,
+    fundTxHash: fundReceipt.hash,
+    commitmentHash: validated.commitmentHash,
+    commitmentURI: validated.commitmentURI,
+    userStatus: "IN_PROGRESS",
+    userMessage: "Payment is locked and the seller can now execute the task."
+  };
+}
+
+function checkTaskTool(sdk: BuyerSdk): BuyerTool<BuyerTaskStatusResult> {
   return {
     name: "tyrpay_check_task",
     description:
@@ -183,14 +276,22 @@ function checkTaskTool(sdk: BuyerSdk): BuyerTool {
       additionalProperties: false
     },
     async execute(input: unknown) {
-      const i = input as { taskId: string };
-      const [task, derivedStatus] = await Promise.all([sdk.getTask(i.taskId), sdk.getTaskStatus(i.taskId)]);
-      return { ...task, derivedStatus, ...mapBuyerUserStatus(task, derivedStatus) };
+      try {
+        const i = validateCheckTaskInput(input);
+        return await getBuyerTaskStatus(sdk, i);
+      } catch (error) {
+        throw wrapBuyerSkillError(error);
+      }
     }
   };
 }
 
-function refundTaskTool(sdk: BuyerSdk): BuyerTool {
+async function getBuyerTaskStatus(sdk: BuyerSdk, input: CheckTaskInput): Promise<BuyerTaskStatusResult> {
+  const [task, derivedStatus] = await Promise.all([sdk.getTask(input.taskId), sdk.getTaskStatus(input.taskId)]);
+  return { ...task, derivedStatus, ...mapBuyerUserStatus(task, derivedStatus) };
+}
+
+function refundTaskTool(sdk: BuyerSdk): BuyerTool<RefundTaskResult> {
   return {
     name: "tyrpay_refund_task",
     description:
@@ -213,21 +314,26 @@ function refundTaskTool(sdk: BuyerSdk): BuyerTool {
       additionalProperties: false
     },
     async execute(input: unknown) {
-      const i = input as { taskId: string; reason: "proof_submission_deadline" | "verification_timeout" };
+      try {
+        const i = validateRefundTaskInput(input);
       const receipt =
         i.reason === "proof_submission_deadline"
           ? await sdk.refundAfterProofSubmissionDeadline(i.taskId)
           : await sdk.refundAfterVerificationTimeout(i.taskId);
       return {
+        taskId: i.taskId,
         txHash: receipt.hash,
         userStatus: "REFUND_IN_PROGRESS",
         userMessage: "A refund transaction was sent. Check the task again to confirm that funds returned to the buyer."
       };
+      } catch (error) {
+        throw wrapBuyerSkillError(error);
+      }
     }
   };
 }
 
-function listTasksTool(sdk: BuyerSdk): BuyerTool {
+function listTasksTool(sdk: BuyerSdk): BuyerTool<ListTasksResult> {
   return {
     name: "tyrpay_list_tasks",
     description:
@@ -249,13 +355,90 @@ function listTasksTool(sdk: BuyerSdk): BuyerTool {
       additionalProperties: false
     },
     async execute(input: unknown) {
-      const i = input as { taskIds: string[] };
-      return Promise.all(
-        i.taskIds.map(async (taskId) => {
-          const [task, derivedStatus] = await Promise.all([sdk.getTask(taskId), sdk.getTaskStatus(taskId)]);
-          return { ...task, derivedStatus, ...mapBuyerUserStatus(task, derivedStatus) };
-        })
-      );
+      try {
+        const i = validateListTasksInput(input);
+        return await executeListTasks(sdk, i);
+      } catch (error) {
+        throw wrapBuyerSkillError(error);
+      }
     }
   };
+}
+
+async function executeListTasks(sdk: BuyerSdk, input: ListTasksInput): Promise<ListTasksResult> {
+  if (input.taskIds.length > MAX_LIST_TASKS) {
+    throw new BuyerSkillToolError({
+      code: "VALIDATION_ERROR",
+      message: `Expected no more than ${MAX_LIST_TASKS} task IDs per call.`,
+      field: "taskIds",
+      received: input.taskIds.length,
+      suggestion: "Split the request into smaller batches.",
+      retryable: false
+    });
+  }
+
+  const results: ListTasksResult = [];
+
+  for (let index = 0; index < input.taskIds.length; index += 5) {
+    const batch = input.taskIds.slice(index, index + 5);
+    const batchResults = await Promise.all(batch.map((taskId) => getBuyerTaskStatus(sdk, { taskId })));
+    results.push(...batchResults);
+  }
+
+  return results;
+}
+
+function readyTool(sdk: BuyerSdk): BuyerTool<ReadyResult> {
+  return {
+    name: "tyrpay_ready",
+    description:
+      "Run a lightweight readiness check for the configured TyrPay buyer SDK. " +
+      "Use this before the first payment workflow to verify signer access and provider connectivity.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false
+    },
+    async execute(input: unknown) {
+      try {
+        if (input !== undefined && (typeof input !== "object" || input === null || Object.keys(input as Record<string, unknown>).length > 0)) {
+          throw new BuyerSkillToolError({
+            code: "VALIDATION_ERROR",
+            message: "tyrpay_ready does not accept arguments.",
+            field: "input",
+            received: input,
+            suggestion: "Call the tool with an empty object.",
+            retryable: false
+          });
+        }
+
+        const signer = (sdk as unknown as { config: { signer: { getAddress(): Promise<string>; provider?: { getNetwork(): Promise<unknown> } } } }).config.signer;
+        const signerAddress = await signer.getAddress();
+
+        if (!signer.provider) {
+          throw new BuyerSkillToolError({
+            code: "CONFIGURATION_ERROR",
+            message: "BuyerSdk signer is missing a provider.",
+            suggestion: "Connect the signer to an RPC provider before using buyer tools.",
+            retryable: false
+          });
+        }
+
+        await signer.provider.getNetwork();
+
+        return {
+          ok: true,
+          signerAddress,
+          userStatus: "READY",
+          userMessage: "BuyerSdk signer and provider are reachable."
+        };
+      } catch (error) {
+        throw wrapBuyerSkillError(error);
+      }
+    }
+  };
+}
+
+function withJitter(pollIntervalMs: number): number {
+  return pollIntervalMs + Math.floor(Math.random() * 1_000);
 }
