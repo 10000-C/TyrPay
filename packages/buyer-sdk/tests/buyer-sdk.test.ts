@@ -103,6 +103,7 @@ function createSdk(opts: {
   reportResolver?: { getReport: (input: unknown) => Promise<VerificationReport | null> };
 } = {}): BuyerSdk {
   const mockSigner = {
+    getAddress: async () => BUYER,
     provider: { getNetwork: async () => ({ chainId: 31337n }) }
   };
 
@@ -208,6 +209,33 @@ describe("BuyerSdk", () => {
         currentTimeMs: PAST_MS + 1n
       });
       assert.equal(await sdk.getTaskStatus(TASK_ID), "PROOF_SUBMITTED");
+    });
+
+    it("returns VERIFIED_PASS when a verification report exists and passed is true", async () => {
+      const fakeSignature = "0x" + "ab".repeat(65);
+      const reportWithSig = {
+        ...(reportFixtureObject as object),
+        signature: fakeSignature
+      };
+      const sdk = createSdk({
+        contractTask: makeTask({ reportHash: reportFixtureHash, status: 3n }),
+        reportResolver: {
+          async getReport() {
+            return reportWithSig as unknown as VerificationReport;
+          }
+        }
+      });
+      assert.equal(await sdk.getTaskStatus(TASK_ID), "VERIFIED_PASS");
+    });
+  });
+
+  describe("ready", () => {
+    it("returns signer and network readiness details", async () => {
+      const sdk = createSdk();
+      const ready = await sdk.ready();
+      assert.equal(ready.signerAddress, BUYER);
+      assert.equal(ready.chainId, "31337");
+      assert.equal(ready.settlementAddress, SETTLEMENT);
     });
   });
 

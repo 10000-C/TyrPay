@@ -39,6 +39,20 @@ function mapBuyerUserStatus(task: { status?: string }, derivedStatus: string): B
     };
   }
 
+  if (derivedStatus === "VERIFIED_PASS") {
+    return {
+      userStatus: "VERIFIED_PASS",
+      userMessage: "Verification passed and settlement release is pending final on-chain completion."
+    };
+  }
+
+  if (derivedStatus === "VERIFIED_FAIL") {
+    return {
+      userStatus: "VERIFIED_FAIL",
+      userMessage: "Verification failed and the task is expected to refund the buyer."
+    };
+  }
+
   if (task.status === "SETTLED") {
     return {
       userStatus: "COMPLETED",
@@ -249,7 +263,7 @@ function fundTaskTool(sdk: BuyerSdk): BuyerTool<FundTaskResult> {
 
 async function executeFundTask(sdk: BuyerSdk, input: FundTaskInput): Promise<FundTaskResult> {
   const validated = await sdk.validateCommitment(input.taskId, input.expectations);
-  const fundReceipt = await sdk.fundTask(input.taskId, { validateCommitment: input.expectations });
+  const fundReceipt = await sdk.fundTask(input.taskId, { skipValidation: true });
 
   return {
     taskId: input.taskId,
@@ -412,23 +426,11 @@ function readyTool(sdk: BuyerSdk): BuyerTool<ReadyResult> {
           });
         }
 
-        const signer = (sdk as unknown as { config: { signer: { getAddress(): Promise<string>; provider?: { getNetwork(): Promise<unknown> } } } }).config.signer;
-        const signerAddress = await signer.getAddress();
-
-        if (!signer.provider) {
-          throw new BuyerSkillToolError({
-            code: "CONFIGURATION_ERROR",
-            message: "BuyerSdk signer is missing a provider.",
-            suggestion: "Connect the signer to an RPC provider before using buyer tools.",
-            retryable: false
-          });
-        }
-
-        await signer.provider.getNetwork();
+        const ready = await sdk.ready();
 
         return {
           ok: true,
-          signerAddress,
+          signerAddress: ready.signerAddress,
           userStatus: "READY",
           userMessage: "BuyerSdk signer and provider are reachable."
         };
