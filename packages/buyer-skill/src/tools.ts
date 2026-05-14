@@ -431,6 +431,7 @@ function readyTool(sdk: BuyerSdk): BuyerTool<ReadyResult> {
         return {
           ok: true,
           signerAddress: ready.signerAddress,
+          chainId: ready.chainId,
           userStatus: "READY",
           userMessage: "BuyerSdk signer and provider are reachable."
         };
