@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { SCHEMA_VERSIONS, hashExecutionCommitment } from "@tyrpay/sdk-core";
 
 import { SellerSkillToolError, TYRPAY_SETTLEMENT_ABI, createSellerTools, normalizeRawOnChainTask } from "../src/index.js";
 import type { AcceptTaskResult, ReadyResult } from "../src/index.js";
+import type { ExecutionCommitment } from "@tyrpay/sdk-core";
 
 const TASK_ID = "0x" + "a".repeat(64);
 const TASK_NONCE = "0x" + "b".repeat(64);
@@ -10,8 +12,23 @@ const SELLER = "0x1111111111111111111111111111111111111111";
 const BUYER = "0x2222222222222222222222222222222222222222";
 const VERIFIER = "0x3333333333333333333333333333333333333333";
 const TOKEN = "0x4444444444444444444444444444444444444444";
-const COMMITMENT_HASH = "0x" + "c".repeat(64);
 const ZERO_HASH = "0x" + "0".repeat(64);
+const COMMITMENT = {
+  schemaVersion: SCHEMA_VERSIONS.executionCommitment,
+  taskId: TASK_ID,
+  buyer: BUYER,
+  seller: SELLER,
+  verifier: VERIFIER,
+  target: {
+    host: "api.openai.com",
+    path: "/v1/chat/completions",
+    method: "POST"
+  },
+  allowedModels: ["gpt-4o-mini"],
+  minUsage: { totalTokens: 500 },
+  deadline: "1760000000000"
+} as ExecutionCommitment;
+const COMMITMENT_HASH = hashExecutionCommitment(COMMITMENT);
 
 function createMockAgent() {
   return {
@@ -19,7 +36,8 @@ function createMockAgent() {
       getAddress: async () => SELLER
     },
     storageAdapter: {
-      putObject: async () => ({ uri: "memory://commitment", hash: COMMITMENT_HASH })
+      putObject: async () => ({ uri: "memory://commitment", hash: COMMITMENT_HASH }),
+      getObject: async () => COMMITMENT
     },
     async submitCommitment() {
       return {
@@ -357,6 +375,42 @@ describe("seller-skill", () => {
     assert.equal(result.taskId, TASK_ID);
     assert.ok(result.txHash);
     assert.ok(result.commitment);
+  });
+
+  it("tyrpay_execute_task can resume commitment state from taskId", async () => {
+    const { tools } = createTestTools();
+    const tool = tools.find((t) => t.name === "tyrpay_execute_task");
+    assert.ok(tool);
+
+    const result = await tool.execute({
+      taskId: TASK_ID,
+      callIndex: 0,
+      request: {
+        host: "api.openai.com",
+        path: "/v1/chat/completions",
+        method: "POST"
+      },
+      declaredModel: "gpt-4o-mini"
+    });
+    const typed = result as { taskId: string; taskNonce: string; commitment: unknown; userStatus: string };
+    assert.equal(typed.taskId, TASK_ID);
+    assert.equal(typed.taskNonce, TASK_NONCE);
+    assert.deepEqual(typed.commitment, COMMITMENT);
+    assert.equal(typed.userStatus, "PROOF_CAPTURED");
+  });
+
+  it("tyrpay_submit_proof can resume commitment state from taskId", async () => {
+    const { tools } = createTestTools();
+    const tool = tools.find((t) => t.name === "tyrpay_submit_proof");
+    assert.ok(tool);
+
+    const result = await tool.execute({
+      taskId: TASK_ID,
+      receipts: [{ taskContext: { taskId: TASK_ID, commitmentHash: COMMITMENT_HASH, seller: SELLER }, extracted: { usage: { totalTokens: 500 } } }]
+    });
+    const typed = result as { taskId: string; userStatus: string };
+    assert.equal(typed.taskId, TASK_ID);
+    assert.equal(typed.userStatus, "AWAITING_VERIFICATION");
   });
 
   // --- Error wrapping ---

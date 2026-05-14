@@ -18,6 +18,7 @@ const ACCEPT_TASK_KEYS = new Set([
 ]);
 
 const EXECUTE_TASK_KEYS = new Set([
+  "taskId",
   "commitment",
   "taskNonce",
   "callIndex",
@@ -29,7 +30,7 @@ const EXECUTE_TASK_KEYS = new Set([
 
 const REQUEST_KEYS = new Set(["host", "path", "method", "headers", "body"]);
 
-const SUBMIT_PROOF_KEYS = new Set(["commitment", "receipts"]);
+const SUBMIT_PROOF_KEYS = new Set(["taskId", "commitment", "receipts"]);
 
 const CHECK_SETTLEMENT_KEYS = new Set(["taskId"]);
 
@@ -51,10 +52,12 @@ export function validateAcceptTaskInput(input: unknown): AcceptTaskInput {
 export function validateExecuteTaskInput(input: unknown): ExecuteTaskInput {
   const object = expectObject(input, "input");
   assertNoAdditionalProperties(object, EXECUTE_TASK_KEYS, "input");
+  assertExecutionCommitmentSource(object);
 
   return {
-    commitment: expectObject(object.commitment, "commitment"),
-    taskNonce: normalizeBytes32Field(expectString(object.taskNonce, "taskNonce"), "taskNonce"),
+    ...(object.taskId !== undefined ? { taskId: normalizeBytes32Field(expectString(object.taskId, "taskId"), "taskId") } : {}),
+    ...(object.commitment !== undefined ? { commitment: expectObject(object.commitment, "commitment") } : {}),
+    ...(object.taskNonce !== undefined ? { taskNonce: normalizeBytes32Field(expectString(object.taskNonce, "taskNonce"), "taskNonce") } : {}),
     callIndex: expectNonNegativeInteger(object.callIndex, "callIndex"),
     request: validateRequest(object.request, "request"),
     declaredModel: expectString(object.declaredModel, "declaredModel"),
@@ -67,12 +70,17 @@ export function validateSubmitProofInput(input: unknown): SubmitProofInput {
   const object = expectObject(input, "input");
   assertNoAdditionalProperties(object, SUBMIT_PROOF_KEYS, "input");
 
+  if (object.taskId === undefined && object.commitment === undefined) {
+    throw validationError("Expected either taskId or commitment.", "taskId", undefined);
+  }
+
   if (!Array.isArray(object.receipts) || object.receipts.length === 0) {
     throw validationError("Expected a non-empty array of receipt objects.", "receipts", object.receipts);
   }
 
   return {
-    commitment: expectObject(object.commitment, "commitment"),
+    ...(object.taskId !== undefined ? { taskId: normalizeBytes32Field(expectString(object.taskId, "taskId"), "taskId") } : {}),
+    ...(object.commitment !== undefined ? { commitment: expectObject(object.commitment, "commitment") } : {}),
     receipts: object.receipts
   };
 }
@@ -101,6 +109,20 @@ function validateRequest(input: unknown, fieldName: string): ExecuteTaskInput["r
     ...(headers ? { headers } : {}),
     ...(object.body !== undefined ? { body: object.body } : {})
   };
+}
+
+function assertExecutionCommitmentSource(object: Record<string, unknown>): void {
+  const hasTaskId = object.taskId !== undefined;
+  const hasCommitment = object.commitment !== undefined;
+  const hasTaskNonce = object.taskNonce !== undefined;
+
+  if (hasTaskId && (hasCommitment || hasTaskNonce)) {
+    throw validationError("Use either taskId or commitment plus taskNonce, not both.", "taskId", object.taskId);
+  }
+
+  if (!hasTaskId && (!hasCommitment || !hasTaskNonce)) {
+    throw validationError("Expected either taskId or both commitment and taskNonce.", "taskId", object.taskId);
+  }
 }
 
 function normalizeBytes32Field(value: string, fieldName: string): string {

@@ -80,8 +80,9 @@ export interface AcceptTaskResult extends SellerStatusView {
 }
 
 export interface ExecuteTaskInput {
-  commitment: Record<string, unknown>;
-  taskNonce: string;
+  taskId?: string;
+  commitment?: Record<string, unknown>;
+  taskNonce?: string;
   callIndex: number;
   request: {
     host: string;
@@ -96,6 +97,9 @@ export interface ExecuteTaskInput {
 }
 
 export interface ExecuteTaskResult extends SellerStatusView {
+  taskId: string;
+  taskNonce: string;
+  commitment: unknown;
   receipt: unknown;
   receiptURI: string;
   receiptHash: string;
@@ -104,7 +108,8 @@ export interface ExecuteTaskResult extends SellerStatusView {
 }
 
 export interface SubmitProofInput {
-  commitment: Record<string, unknown>;
+  taskId?: string;
+  commitment?: Record<string, unknown>;
   receipts: unknown[];
 }
 

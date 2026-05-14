@@ -1,10 +1,14 @@
 import {
   SCHEMA_VERSIONS,
+  assertExecutionCommitment,
+  hashExecutionCommitment,
   normalizeAddress,
   normalizeBytes32,
   normalizeUIntString,
+  type Bytes32,
   type DeliveryReceipt,
   type ExecutionCommitment,
+  type URI,
   type UnixMillis
 } from "@tyrpay/sdk-core";
 import type { ContractLike, SellerAgent } from "@tyrpay/seller-sdk";
@@ -13,6 +17,7 @@ import type {
   AcceptTaskResult,
   CheckSettlementResult,
   ExecuteTaskResult,
+  RawOnChainTask,
   ReadyResult,
   ReadableContractLike,
   SellerSkillConfig,
@@ -81,7 +86,7 @@ export function createSellerTools(config: SellerSkillConfig): SellerTool[] {
   const { agent, contract, verifier } = config;
   return [
     acceptTaskTool(agent, contract, verifier),
-    executeTaskTool(agent),
+    executeTaskTool(agent, contract),
     submitProofTool(agent, contract),
     checkSettlementTool(contract),
     readyTool(agent)
@@ -165,7 +170,7 @@ function acceptTaskTool(agent: SellerAgent, contract: ReadableContractLike, veri
   };
 }
 
-function executeTaskTool(agent: SellerAgent): SellerTool<ExecuteTaskResult> {
+function executeTaskTool(agent: SellerAgent, contract: ReadableContractLike): SellerTool<ExecuteTaskResult> {
   return {
     name: "tyrpay_execute_task",
     description:
@@ -174,15 +179,23 @@ function executeTaskTool(agent: SellerAgent): SellerTool<ExecuteTaskResult> {
       "Returns the receipt object needed for tyrpay_submit_proof.",
     inputSchema: {
       type: "object",
-      required: ["commitment", "taskNonce", "callIndex", "request", "declaredModel"],
+      required: ["callIndex", "request", "declaredModel"],
+      anyOf: [
+        { required: ["taskId"] },
+        { required: ["commitment", "taskNonce"] }
+      ],
       properties: {
+        taskId: {
+          type: "string",
+          description: "Task ID to resume from chain and storage. Preferred for recoverable workflows."
+        },
         commitment: {
           type: "object",
-          description: "The ExecutionCommitment you submitted (returned by tyrpay_accept_task)"
+          description: "The ExecutionCommitment you submitted (returned by tyrpay_accept_task). Legacy mode; prefer taskId."
         },
         taskNonce: {
           type: "string",
-          description: "The task nonce bytes32 hex (from the on-chain task record)"
+          description: "The task nonce bytes32 hex (from the on-chain task record). Required only with commitment."
         },
         callIndex: {
           type: "number",
@@ -219,10 +232,11 @@ function executeTaskTool(agent: SellerAgent): SellerTool<ExecuteTaskResult> {
     async execute(input: unknown) {
       try {
         const i = validateExecuteTaskInput(input);
+        const execution = await resolveExecutionCommitment(agent, contract, i);
 
         const result = await agent.provenFetch({
-          commitment: i.commitment as unknown as ExecutionCommitment,
-          taskNonce: normalizeBytes32(i.taskNonce, "taskNonce"),
+          commitment: execution.commitment,
+          taskNonce: execution.taskNonce,
           callIndex: i.callIndex,
           request: i.request,
           declaredModel: i.declaredModel,
@@ -231,6 +245,9 @@ function executeTaskTool(agent: SellerAgent): SellerTool<ExecuteTaskResult> {
         });
 
         return {
+          taskId: execution.commitment.taskId,
+          taskNonce: execution.taskNonce,
+          commitment: execution.commitment,
           receipt: result.receipt,
           receiptURI: result.receiptPointer.uri,
           receiptHash: result.receiptPointer.hash,
@@ -254,11 +271,19 @@ function submitProofTool(agent: SellerAgent, contract: ReadableContractLike): Se
       "Use this after all required execution calls are complete to move the task into final verification.",
     inputSchema: {
       type: "object",
-      required: ["commitment", "receipts"],
+      required: ["receipts"],
+      anyOf: [
+        { required: ["taskId"] },
+        { required: ["commitment"] }
+      ],
       properties: {
+        taskId: {
+          type: "string",
+          description: "Task ID to resume from chain and storage. Preferred for recoverable workflows."
+        },
         commitment: {
           type: "object",
-          description: "The ExecutionCommitment for this task"
+          description: "The ExecutionCommitment for this task. Legacy mode; prefer taskId."
         },
         receipts: {
           type: "array",
@@ -272,7 +297,8 @@ function submitProofTool(agent: SellerAgent, contract: ReadableContractLike): Se
     async execute(input: unknown) {
       try {
         const i = validateSubmitProofInput(input);
-        const bundle = agent.buildProofBundle({ commitment: i.commitment as unknown as ExecutionCommitment, receipts: i.receipts as DeliveryReceipt[] });
+        const commitment = await resolveProofCommitment(agent, contract, i);
+        const bundle = agent.buildProofBundle({ commitment, receipts: i.receipts as DeliveryReceipt[] });
         const { pointer } = await agent.uploadProofBundle(bundle);
         const result = await agent.submitProofBundleHash(
           contract as ContractLike,
@@ -293,6 +319,80 @@ function submitProofTool(agent: SellerAgent, contract: ReadableContractLike): Se
       }
     }
   };
+}
+
+async function resolveExecutionCommitment(
+  agent: SellerAgent,
+  contract: ReadableContractLike,
+  input: { taskId?: string; commitment?: Record<string, unknown>; taskNonce?: string }
+): Promise<{ commitment: ExecutionCommitment; taskNonce: Bytes32 }> {
+  if (input.taskId) {
+    const { task, commitment } = await loadCommitmentForTask(agent, contract, input.taskId);
+    return {
+      commitment,
+      taskNonce: task.taskNonce as Bytes32
+    };
+  }
+
+  assertExecutionCommitment(input.commitment);
+  return {
+    commitment: input.commitment,
+    taskNonce: normalizeBytes32(input.taskNonce!, "taskNonce")
+  };
+}
+
+async function resolveProofCommitment(
+  agent: SellerAgent,
+  contract: ReadableContractLike,
+  input: { taskId?: string; commitment?: Record<string, unknown> }
+): Promise<ExecutionCommitment> {
+  if (input.taskId) {
+    return (await loadCommitmentForTask(agent, contract, input.taskId)).commitment;
+  }
+
+  assertExecutionCommitment(input.commitment);
+  return input.commitment;
+}
+
+async function loadCommitmentForTask(
+  agent: SellerAgent,
+  contract: ReadableContractLike,
+  taskId: string
+): Promise<{ task: RawOnChainTask; commitment: ExecutionCommitment }> {
+  const task = normalizeRawOnChainTask(await contract.getTask(normalizeBytes32(taskId, "taskId")));
+
+  if (isEmptyBytes32(task.commitmentHash) || task.commitmentURI.length === 0) {
+    throw new SellerSkillToolError({
+      code: "CONFIGURATION_ERROR",
+      message: `Task ${task.taskId} does not have a submitted commitment URI and hash.`,
+      suggestion: "Wait until tyrpay_accept_task succeeds, then retry with the same taskId.",
+      retryable: false
+    });
+  }
+
+  const commitment = await agent.storageAdapter.getObject<ExecutionCommitment>(
+    {
+      uri: task.commitmentURI as URI,
+      hash: task.commitmentHash as Bytes32
+    },
+    {
+      expectedHash: task.commitmentHash as Bytes32
+    }
+  );
+
+  assertExecutionCommitment(commitment);
+
+  const computedHash = hashExecutionCommitment(commitment);
+  if (computedHash !== task.commitmentHash) {
+    throw new SellerSkillToolError({
+      code: "CONFIGURATION_ERROR",
+      message: `Commitment hash mismatch for task ${task.taskId}.`,
+      suggestion: "Fetch the exact canonical commitment object from the submitted commitmentURI.",
+      retryable: false
+    });
+  }
+
+  return { task, commitment };
 }
 
 function checkSettlementTool(contract: ReadableContractLike): SellerTool<CheckSettlementResult> {
