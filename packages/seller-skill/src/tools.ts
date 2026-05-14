@@ -8,7 +8,24 @@ import {
   type UnixMillis
 } from "@tyrpay/sdk-core";
 import type { ContractLike, SellerAgent } from "@tyrpay/seller-sdk";
-import type { ReadableContractLike, SellerSkillConfig, SellerTool } from "./types.js";
+import { SellerSkillToolError, wrapSellerSkillError } from "./errors.js";
+import type {
+  AcceptTaskResult,
+  CheckSettlementResult,
+  ExecuteTaskResult,
+  ReadyResult,
+  ReadableContractLike,
+  SellerSkillConfig,
+  SellerStatusView,
+  SellerTool,
+  SubmitProofResult
+} from "./types.js";
+import {
+  validateAcceptTaskInput,
+  validateCheckSettlementInput,
+  validateExecuteTaskInput,
+  validateSubmitProofInput
+} from "./validation.js";
 
 const ZERO_HASH = "0x" + "0".repeat(64);
 const TASK_STATUS_NAMES = [
@@ -20,7 +37,7 @@ const TASK_STATUS_NAMES = [
   "REFUNDED"
 ] as const;
 
-function mapSellerUserStatus(status: string) {
+function mapSellerUserStatus(status: string): SellerStatusView {
   switch (status) {
     case "INTENT_CREATED":
       return {
@@ -66,11 +83,12 @@ export function createSellerTools(config: SellerSkillConfig): SellerTool[] {
     acceptTaskTool(agent, contract, verifier),
     executeTaskTool(agent),
     submitProofTool(agent, contract),
-    checkSettlementTool(contract)
+    checkSettlementTool(contract),
+    readyTool(agent)
   ];
 }
 
-function acceptTaskTool(agent: SellerAgent, contract: ReadableContractLike, verifier: string): SellerTool {
+function acceptTaskTool(agent: SellerAgent, contract: ReadableContractLike, verifier: string): SellerTool<AcceptTaskResult> {
   return {
     name: "tyrpay_accept_task",
     description:
@@ -103,55 +121,51 @@ function acceptTaskTool(agent: SellerAgent, contract: ReadableContractLike, veri
       additionalProperties: false
     },
     async execute(input: unknown) {
-      const i = input as {
-        taskId: string;
-        host: string;
-        path: string;
-        method: string;
-        allowedModels: string[];
-        minTotalTokens: number;
-        deadline: string;
-      };
+      try {
+        const i = validateAcceptTaskInput(input);
 
-      const rawTask = await contract.getTask(normalizeBytes32(i.taskId, "taskId"));
-      const sellerAddress = normalizeAddress(await agent.signer.getAddress(), "seller");
-      const buyerAddress = normalizeAddress(rawTask.buyer, "buyer");
-      const verifierAddress = normalizeAddress(verifier, "verifier");
-      const taskId = normalizeBytes32(i.taskId, "taskId");
+        const rawTask = await contract.getTask(normalizeBytes32(i.taskId, "taskId"));
+        const sellerAddress = normalizeAddress(await agent.signer.getAddress(), "seller");
+        const buyerAddress = normalizeAddress(rawTask.buyer, "buyer");
+        const verifierAddress = normalizeAddress(verifier, "verifier");
+        const taskId = normalizeBytes32(i.taskId, "taskId");
 
-      const commitment: ExecutionCommitment = {
-        schemaVersion: SCHEMA_VERSIONS.executionCommitment,
-        taskId,
-        buyer: buyerAddress,
-        seller: sellerAddress,
-        verifier: verifierAddress,
-        target: {
-          host: i.host,
-          path: i.path,
-          method: i.method.toUpperCase()
-        },
-        allowedModels: i.allowedModels,
-        minUsage: { totalTokens: i.minTotalTokens },
-        deadline: normalizeUIntString(i.deadline, "deadline") as UnixMillis
-      };
+        const commitment: ExecutionCommitment = {
+          schemaVersion: SCHEMA_VERSIONS.executionCommitment,
+          taskId,
+          buyer: buyerAddress,
+          seller: sellerAddress,
+          verifier: verifierAddress,
+          target: {
+            host: i.host,
+            path: i.path,
+            method: i.method.toUpperCase()
+          },
+          allowedModels: i.allowedModels,
+          minUsage: { totalTokens: i.minTotalTokens },
+          deadline: normalizeUIntString(i.deadline, "deadline") as UnixMillis
+        };
 
-      const pointer = await agent.storageAdapter.putObject(commitment, { namespace: "commitments" });
-      const result = await agent.submitCommitment(contract as ContractLike, commitment, pointer.uri);
+        const pointer = await agent.storageAdapter.putObject(commitment, { namespace: "commitments" });
+        const result = await agent.submitCommitment(contract as ContractLike, commitment, pointer.uri);
 
-      return {
-        txHash: result.txHash,
-        taskId: result.taskId,
-        commitmentHash: result.commitmentHash,
-        commitmentURI: result.commitmentURI,
-        commitment,
-        userStatus: "WAITING_FOR_BUYER_FUNDING",
-        userMessage: "Execution terms were submitted. Wait for the buyer to approve and lock payment."
-      };
+        return {
+          txHash: result.txHash,
+          taskId: result.taskId,
+          commitmentHash: result.commitmentHash,
+          commitmentURI: result.commitmentURI,
+          commitment,
+          userStatus: "WAITING_FOR_BUYER_FUNDING",
+          userMessage: "Execution terms were submitted. Wait for the buyer to approve and lock payment."
+        };
+      } catch (error) {
+        throw wrapSellerSkillError(error);
+      }
     }
   };
 }
 
-function executeTaskTool(agent: SellerAgent): SellerTool {
+function executeTaskTool(agent: SellerAgent): SellerTool<ExecuteTaskResult> {
   return {
     name: "tyrpay_execute_task",
     description:
@@ -199,44 +213,35 @@ function executeTaskTool(agent: SellerAgent): SellerTool {
       additionalProperties: false
     },
     async execute(input: unknown) {
-      const i = input as {
-        commitment: ExecutionCommitment;
-        taskNonce: string;
-        callIndex: number;
-        request: {
-          host: string;
-          path: string;
-          method: string;
-          headers?: Record<string, string>;
-          body?: unknown;
+      try {
+        const i = validateExecuteTaskInput(input);
+
+        const result = await agent.provenFetch({
+          commitment: i.commitment as unknown as ExecutionCommitment,
+          taskNonce: normalizeBytes32(i.taskNonce, "taskNonce"),
+          callIndex: i.callIndex,
+          request: i.request,
+          declaredModel: i.declaredModel,
+          ...(i.providerOptions ? { providerOptions: i.providerOptions } : {})
+        });
+
+        return {
+          receipt: result.receipt,
+          receiptURI: result.receiptPointer.uri,
+          receiptHash: result.receiptPointer.hash,
+          rawProofURI: result.rawProofPointer.uri,
+          rawProofHash: result.rawProofPointer.hash,
+          userStatus: "PROOF_CAPTURED",
+          userMessage: "Execution proof was captured. Submit proof to move the task into verification."
         };
-        declaredModel: string;
-        providerOptions?: Record<string, unknown>;
-      };
-
-      const result = await agent.provenFetch({
-        commitment: i.commitment,
-        taskNonce: normalizeBytes32(i.taskNonce, "taskNonce"),
-        callIndex: i.callIndex,
-        request: i.request,
-        declaredModel: i.declaredModel,
-        ...(i.providerOptions ? { providerOptions: i.providerOptions } : {})
-      });
-
-      return {
-        receipt: result.receipt,
-        receiptURI: result.receiptPointer.uri,
-        receiptHash: result.receiptPointer.hash,
-        rawProofURI: result.rawProofPointer.uri,
-        rawProofHash: result.rawProofPointer.hash,
-        userStatus: "PROOF_CAPTURED",
-        userMessage: "Execution proof was captured. Submit proof to move the task into verification."
-      };
+      } catch (error) {
+        throw wrapSellerSkillError(error);
+      }
     }
   };
 }
 
-function submitProofTool(agent: SellerAgent, contract: ReadableContractLike): SellerTool {
+function submitProofTool(agent: SellerAgent, contract: ReadableContractLike): SellerTool<SubmitProofResult> {
   return {
     name: "tyrpay_submit_proof",
     description:
@@ -260,28 +265,32 @@ function submitProofTool(agent: SellerAgent, contract: ReadableContractLike): Se
       additionalProperties: false
     },
     async execute(input: unknown) {
-      const i = input as { commitment: ExecutionCommitment; receipts: DeliveryReceipt[] };
-      const bundle = agent.buildProofBundle({ commitment: i.commitment, receipts: i.receipts });
-      const { pointer } = await agent.uploadProofBundle(bundle);
-      const result = await agent.submitProofBundleHash(
-        contract as ContractLike,
-        bundle.taskId,
-        pointer.hash,
-        pointer.uri
-      );
-      return {
-        txHash: result.txHash,
-        taskId: result.taskId,
-        proofBundleHash: result.proofBundleHash,
-        proofBundleURI: result.proofBundleURI,
-        userStatus: "AWAITING_VERIFICATION",
-        userMessage: "Proof was submitted. Wait for verification to release payment."
-      };
+      try {
+        const i = validateSubmitProofInput(input);
+        const bundle = agent.buildProofBundle({ commitment: i.commitment as unknown as ExecutionCommitment, receipts: i.receipts as DeliveryReceipt[] });
+        const { pointer } = await agent.uploadProofBundle(bundle);
+        const result = await agent.submitProofBundleHash(
+          contract as ContractLike,
+          bundle.taskId,
+          pointer.hash,
+          pointer.uri
+        );
+        return {
+          txHash: result.txHash,
+          taskId: result.taskId,
+          proofBundleHash: result.proofBundleHash,
+          proofBundleURI: result.proofBundleURI,
+          userStatus: "AWAITING_VERIFICATION",
+          userMessage: "Proof was submitted. Wait for verification to release payment."
+        };
+      } catch (error) {
+        throw wrapSellerSkillError(error);
+      }
     }
   };
 }
 
-function checkSettlementTool(contract: ReadableContractLike): SellerTool {
+function checkSettlementTool(contract: ReadableContractLike): SellerTool<CheckSettlementResult> {
   return {
     name: "tyrpay_check_settlement",
     description:
@@ -296,24 +305,67 @@ function checkSettlementTool(contract: ReadableContractLike): SellerTool {
       additionalProperties: false
     },
     async execute(input: unknown) {
-      const i = input as { taskId: string };
-      const task = await contract.getTask(normalizeBytes32(i.taskId, "taskId"));
-      const statusCode = Number(task.status);
-      const status = TASK_STATUS_NAMES[statusCode] ?? "UNKNOWN";
+      try {
+        const i = validateCheckSettlementInput(input);
+        const task = await contract.getTask(normalizeBytes32(i.taskId, "taskId"));
+        const statusCode = Number(task.status);
+        const status = TASK_STATUS_NAMES[statusCode] ?? "UNKNOWN";
 
-      return {
-        taskId: i.taskId,
-        status,
-        settled: status === "SETTLED",
-        refunded: status === "REFUNDED",
-        proofSubmittedAt: task.proofSubmittedAtMs > 0n ? task.proofSubmittedAtMs.toString() : null,
-        proofBundleHash: task.proofBundleHash !== ZERO_HASH ? task.proofBundleHash : null,
-        proofBundleURI: task.proofBundleURI || null,
-        settledAt: task.settledAtMs > 0n ? task.settledAtMs.toString() : null,
-        refundedAt: task.refundedAtMs > 0n ? task.refundedAtMs.toString() : null,
-        reportHash: task.reportHash !== ZERO_HASH ? task.reportHash : null,
-        ...mapSellerUserStatus(status)
-      };
+        return {
+          taskId: i.taskId,
+          status,
+          settled: status === "SETTLED",
+          refunded: status === "REFUNDED",
+          proofSubmittedAt: task.proofSubmittedAtMs > 0n ? task.proofSubmittedAtMs.toString() : null,
+          proofBundleHash: task.proofBundleHash !== ZERO_HASH ? task.proofBundleHash : null,
+          proofBundleURI: task.proofBundleURI || null,
+          settledAt: task.settledAtMs > 0n ? task.settledAtMs.toString() : null,
+          refundedAt: task.refundedAtMs > 0n ? task.refundedAtMs.toString() : null,
+          reportHash: task.reportHash !== ZERO_HASH ? task.reportHash : null,
+          ...mapSellerUserStatus(status)
+        };
+      } catch (error) {
+        throw wrapSellerSkillError(error);
+      }
+    }
+  };
+}
+
+function readyTool(agent: SellerAgent): SellerTool<ReadyResult> {
+  return {
+    name: "tyrpay_ready",
+    description:
+      "Run a lightweight readiness check for the configured TyrPay seller agent. " +
+      "Use this before the first task workflow to verify signer access and storage adapter connectivity.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false
+    },
+    async execute(input: unknown) {
+      try {
+        if (input !== undefined && (typeof input !== "object" || input === null || Object.keys(input as Record<string, unknown>).length > 0)) {
+          throw new SellerSkillToolError({
+            code: "VALIDATION_ERROR",
+            message: "tyrpay_ready does not accept arguments.",
+            field: "input",
+            received: input,
+            suggestion: "Call the tool with an empty object.",
+            retryable: false
+          });
+        }
+
+        const signerAddress = await agent.signer.getAddress();
+
+        return {
+          ok: true,
+          signerAddress,
+          userStatus: "READY",
+          userMessage: "Seller signer is reachable and storage adapter is configured."
+        };
+      } catch (error) {
+        throw wrapSellerSkillError(error);
+      }
     }
   };
 }
