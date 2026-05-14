@@ -11,10 +11,10 @@ interface IVerifierRegistry {
     function isVerifier(address verifier) external view returns (bool);
 }
 
-contract FulfillPaySettlement is EIP712, Ownable {
+contract TyrPaySettlement is EIP712, Ownable {
     using SafeERC20 for IERC20;
 
-    string public constant EIP712_NAME = "FulfillPay";
+    string public constant EIP712_NAME = "TyrPay";
     string public constant EIP712_VERSION = "1";
 
     uint8 public constant SETTLEMENT_ACTION_RELEASE = 1;
