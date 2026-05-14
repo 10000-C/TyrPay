@@ -7,13 +7,15 @@ contract into structured tool definitions that an agent can execute directly.
 
 ## What This Package Exports
 
-- `createSellerTools(config)`: returns four seller-side tools
+- `createSellerTools(config)`: returns five seller-side tools
+- `SellerSkillToolError`: structured error class with `code`, `field`, `suggestion`, `retryable`
 - `SellerTool`: the shared tool shape used by this package
 - `ReadableContractLike`: the read/write contract interface expected by the tools
 - `SellerSkillConfig`: configuration shape for `createSellerTools`
 
 Tool names:
 
+- `tyrpay_ready`
 - `tyrpay_accept_task`
 - `tyrpay_execute_task`
 - `tyrpay_submit_proof`
@@ -31,14 +33,16 @@ This package assumes you already have a configured `SellerAgent`.
 
 Typical seller-side flow:
 
-1. Receive a `taskId` from the buyer through your own application or messaging layer.
-2. Call `tyrpay_accept_task` to build and submit the execution commitment.
-3. Wait for the buyer to validate that commitment and fund the task.
-4. Read the funded task from the settlement contract and obtain its `taskNonce`.
-5. Call `tyrpay_execute_task` once per proved upstream API call.
-6. Keep each returned receipt.
-7. Call `tyrpay_submit_proof` with the commitment and collected receipts.
-8. Use `tyrpay_check_settlement` to monitor whether the verifier settled or refunded the task, with both raw protocol status and seller-facing status fields.
+1. Call `tyrpay_ready` to verify signer access and storage adapter connectivity.
+2. Receive a `taskId` from the buyer through your own application or messaging layer.
+3. Call `tyrpay_accept_task` to build and submit the execution commitment.
+4. Wait for the buyer to validate that commitment and fund the task.
+   Poll with `tyrpay_check_settlement` until status is `READY_TO_EXECUTE`.
+5. Read the funded task from the settlement contract and obtain its `taskNonce`.
+6. Call `tyrpay_execute_task` once per proved upstream API call.
+7. Keep each returned receipt.
+8. Call `tyrpay_submit_proof` with the commitment and collected receipts.
+9. Use `tyrpay_check_settlement` to monitor whether the verifier settled or refunded the task.
 
 `seller-skill` does not discover tasks, coordinate with the buyer, or operate a
 verifier. Those responsibilities stay outside this package.
@@ -155,7 +159,47 @@ const accepted = await acceptTask.execute({
 });
 ```
 
+## Error Handling
+
+All tools wrap errors in `SellerSkillToolError`, which provides structured fields:
+
+- `code`: one of `VALIDATION_ERROR`, `CONFIGURATION_ERROR`, `NETWORK_ERROR`, `TIMEOUT`, `UNKNOWN_ERROR`
+- `message`: human-readable error description
+- `field`: the input field that caused the error (for validation errors)
+- `received`: the actual value that was rejected
+- `suggestion`: guidance on how to fix the error
+- `retryable`: whether the operation can be retried
+- `causeName`: the underlying error class name
+
+```ts
+import { SellerSkillToolError } from "@tyrpay/seller-skill";
+
+try {
+  await acceptTask.execute({ taskId: "bad-id" });
+} catch (error) {
+  if (error instanceof SellerSkillToolError) {
+    console.log(error.code);       // "VALIDATION_ERROR"
+    console.log(error.field);      // "taskId"
+    console.log(error.suggestion); // "Fix the tool arguments and try again."
+    console.log(error.retryable);  // false
+  }
+}
+```
+
 ## Tool Semantics
+
+### `tyrpay_ready`
+
+Lightweight readiness check that verifies the seller signer is reachable.
+
+Call this before the first task workflow to fail fast on misconfiguration.
+
+Returns:
+
+- `ok`: always `true` on success
+- `signerAddress`: the seller's wallet address
+- `userStatus`: `READY`
+- `userMessage`: confirmation that signer is reachable
 
 ### `tyrpay_accept_task`
 
@@ -178,17 +222,6 @@ Returns:
 
 Runs one zkTLS-proven upstream API call using the supplied commitment, request,
 task nonce, and declared model.
-
-Returns:
-
-- `receipt`
-- `receiptURI`
-- `receiptHash`
-- `rawProofURI`
-- `rawProofHash`
-
-You usually keep the returned receipts and pass them into
-`tyrpay_submit_proof`.
 
 Returns:
 
@@ -248,9 +281,14 @@ Returns:
 - `declaredModel` must be included in `commitment.allowedModels`.
 - `request.host`, `request.path`, and `request.method` must match the commitment
   target exactly.
+- All tool inputs are validated at runtime before any SDK or on-chain calls.
 
 ## Related Packages
 
 - `@tyrpay/seller-sdk`: proof generation, bundle assembly, and on-chain seller flow
 - `@tyrpay/agent-kit`: prebuilt Claude/OpenAI wrappers if you do not want to map
   the tool shape yourself
+
+## Further Reading
+
+- [Seller Proof Generation Guide](../../docs/seller/seller-proof-generation-guide.md)
