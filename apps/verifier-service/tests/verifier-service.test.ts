@@ -41,6 +41,8 @@ import {
   type ProofConsumptionRegistry,
   type PrismaProofConsumptionKeyCreateInput,
   type PrismaProofConsumptionRegistryClient,
+  type SettlementReportStruct,
+  type SettlementWriter,
   type SettlementTaskReader
 } from "../src/index.js";
 
@@ -79,6 +81,7 @@ interface BuildFixtureOptions {
   taskCommitmentHash?: Bytes32;
   callIntentHash?: Bytes32;
   proofBundleConsumed?: boolean;
+  settlementWriter?: SettlementWriter;
 }
 
 interface BuildReclaimFixtureOptions {
@@ -183,6 +186,22 @@ class FakeReclaimClient implements ReclaimClientLike {
           },
           choices: []
         })
+      }
+    };
+  }
+}
+
+class MockSettlementWriter implements SettlementWriter {
+  calls: Array<{ report: SettlementReportStruct; signature: string }> = [];
+  waitCalls = 0;
+
+  async settleReport(report: SettlementReportStruct, signature: string) {
+    this.calls.push({ report, signature });
+    return {
+      hash: "0xtest-settle",
+      wait: async () => {
+        this.waitCalls += 1;
+        return { status: 1 };
       }
     };
   }
@@ -479,6 +498,41 @@ test("serves verification reports over the HTTP API", async () => {
       server.close((error) => (error ? reject(error) : resolve()))
     );
   }
+});
+
+test("automatically settles when a settlement writer is injected at construction", async () => {
+  const writer = new MockSettlementWriter();
+  const fixture = await buildFixture({ settlementWriter: writer });
+
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId);
+
+  assert.equal(writer.calls.length, 1);
+  assert.equal(writer.calls[0]?.report.taskId, fixture.task.taskId);
+  assert.equal(writer.calls[0]?.signature, result.report.signature);
+  assert.equal(writer.waitCalls, 1);
+  assert.equal(result.settlementSubmission?.transaction.hash, "0xtest-settle");
+  assert.deepEqual(result.settlementSubmission?.receipt, { status: 1 });
+});
+
+test("can skip automatic settlement even when a writer is injected", async () => {
+  const writer = new MockSettlementWriter();
+  const fixture = await buildFixture({ settlementWriter: writer });
+
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { settle: false });
+
+  assert.equal(writer.calls.length, 0);
+  assert.equal(result.settlementSubmission, undefined);
+});
+
+test("can submit settlement without waiting for receipt", async () => {
+  const writer = new MockSettlementWriter();
+  const fixture = await buildFixture({ settlementWriter: writer });
+
+  const result = await fixture.verifier.verifyTask(fixture.task.taskId, { waitForSettlement: false });
+
+  assert.equal(writer.calls.length, 1);
+  assert.equal(writer.waitCalls, 0);
+  assert.equal(result.settlementSubmission?.receipt, undefined);
 });
 
 test("fails when receipt usage is inflated beyond the raw proof extraction", async () => {
@@ -912,6 +966,7 @@ async function buildFixture(options: BuildFixtureOptions = {}) {
   settlement.proofBundleConsumed = options.proofBundleConsumed ?? false;
   const verifier = new CentralizedVerifier({
     settlement,
+    settlementWriter: options.settlementWriter,
     storage,
     signer: verifierWallet,
     zktlsAdapters: [mockZkTlsAdapter],

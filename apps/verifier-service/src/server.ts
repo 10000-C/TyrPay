@@ -9,6 +9,7 @@ import { ZeroGStorageAdapter, createZeroGStorageTransport } from "@tyrpay/storag
 import { ReclaimZkTlsAdapter, ZeroGTeeTlsAdapter } from "@tyrpay/zktls-adapter";
 import {
   CentralizedVerifier,
+  EthersSettlementWriter,
   EthersSettlementTaskReader,
   InMemoryProofConsumptionRegistry,
   createVerifierHttpServer
@@ -68,6 +69,10 @@ async function main() {
       settlementAddress,
       runner: verifierWallet as never,
       chainId
+    }),
+    settlementWriter: new EthersSettlementWriter({
+      settlementAddress,
+      runner: verifierWallet as never
     }),
     storage,
     signer: verifierWallet as unknown as import("./index.js").VerificationReportSigner,

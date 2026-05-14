@@ -97,6 +97,18 @@ export interface SettlementTaskReader {
   getVerificationTimeout(): Promise<UIntLike>;
 }
 
+export interface SettlementTransactionResponseLike {
+  hash?: string;
+  wait?: () => Promise<unknown>;
+}
+
+export interface SettlementWriter {
+  settleReport(
+    report: SettlementReportStruct,
+    signature: string
+  ): Promise<SettlementTransactionResponseLike> | SettlementTransactionResponseLike;
+}
+
 export interface RawProofVerifier {
   readonly name: string;
   verifyRawProof(rawProof: unknown): Promise<boolean>;
@@ -180,6 +192,7 @@ export interface PrismaProofConsumptionKeyRecord {
 
 export interface CentralizedVerifierOptions {
   settlement: SettlementTaskReader;
+  settlementWriter?: SettlementWriter;
   storage: StorageAdapter;
   signer: VerificationReportSigner;
   zktlsAdapters: RawProofVerifier[];
@@ -190,6 +203,8 @@ export interface CentralizedVerifierOptions {
 
 export interface VerifyTaskOptions {
   markProofsConsumed?: boolean;
+  settle?: boolean;
+  waitForSettlement?: boolean;
 }
 
 export interface VerificationInputs {
@@ -218,6 +233,7 @@ export interface VerificationResult {
   checks: RequiredVerificationChecks;
   aggregateUsage: AggregateUsage;
   consumed: boolean;
+  settlementSubmission?: SettlementSubmission;
 }
 
 export interface VerifierHttpServerOptions {
@@ -228,6 +244,8 @@ export interface VerifierHttpServerOptions {
 export interface VerifyTaskHttpRequest {
   taskId: string;
   markProofsConsumed?: boolean;
+  settle?: boolean;
+  waitForSettlement?: boolean;
 }
 
 export interface SettlementReportStruct {
@@ -241,6 +259,13 @@ export interface SettlementReportStruct {
   settlementAmount: bigint;
   verifiedAt: bigint;
   reportHash: Bytes32;
+}
+
+export interface SettlementSubmission {
+  report: SettlementReportStruct;
+  signature: string;
+  transaction: SettlementTransactionResponseLike;
+  receipt?: unknown;
 }
 
 export class VerifierInputUnavailableError extends Error {
@@ -287,12 +312,20 @@ const SETTLEMENT_READER_ABI = [
 ] as const;
 
 const VERIFIER_REGISTRY_READER_ABI = ["function isVerifier(address verifier) view returns (bool)"] as const;
+const SETTLEMENT_WRITER_ABI = [
+  "function settle((bytes32 taskId, address buyer, address seller, bytes32 commitmentHash, bytes32 proofBundleHash, bool passed, uint8 settlementAction, uint256 settlementAmount, uint256 verifiedAt, bytes32 reportHash), bytes) external"
+] as const;
 
 export interface EthersSettlementTaskReaderOptions {
   settlementAddress: string;
   runner: ContractRunner;
   chainId?: UIntLike;
   verifierRegistryAddress?: string;
+}
+
+export interface EthersSettlementWriterOptions {
+  settlementAddress: string;
+  runner: ContractRunner;
 }
 
 export class EthersSettlementTaskReader implements SettlementTaskReader {
@@ -359,6 +392,21 @@ export class EthersSettlementTaskReader implements SettlementTaskReader {
 
   async getVerificationTimeout(): Promise<UIntString> {
     return normalizeUIntString(await this.settlement.verificationTimeoutMs(), "verificationTimeoutMs");
+  }
+}
+
+export class EthersSettlementWriter implements SettlementWriter {
+  private readonly settlement: Contract;
+
+  constructor(options: EthersSettlementWriterOptions) {
+    this.settlement = new Contract(options.settlementAddress, SETTLEMENT_WRITER_ABI, options.runner);
+  }
+
+  async settleReport(
+    report: SettlementReportStruct,
+    signature: string
+  ): Promise<SettlementTransactionResponseLike> {
+    return this.settlement.settle(report, signature) as Promise<SettlementTransactionResponseLike>;
   }
 }
 
@@ -519,7 +567,8 @@ export class CentralizedVerifier {
       reportPointer,
       checks: evaluation.checks,
       aggregateUsage: evaluation.aggregateUsage,
-      consumed
+      consumed,
+      settlementSubmission: await this.maybeSettle(report, options)
     };
   }
 
@@ -742,6 +791,29 @@ export class CentralizedVerifier {
       throw new VerifierInputUnavailableError(`Unable to load ${label} from ${uri}: ${toErrorMessage(error)}`);
     }
   }
+
+  private async maybeSettle(
+    report: VerificationReport,
+    options: VerifyTaskOptions
+  ): Promise<SettlementSubmission | undefined> {
+    const writer = this.options.settlementWriter;
+    const shouldSettle = options.settle ?? writer !== undefined;
+    if (!writer || !shouldSettle) {
+      return undefined;
+    }
+
+    const settlementReport = toSettlementReportStruct(report);
+    const transaction = await writer.settleReport(settlementReport, report.signature);
+    const shouldWait = options.waitForSettlement ?? true;
+    const receipt = shouldWait && transaction.wait ? await transaction.wait() : undefined;
+
+    return {
+      report: settlementReport,
+      signature: report.signature,
+      transaction,
+      receipt
+    };
+  }
 }
 
 export function createVerifierService(options: CentralizedVerifierOptions): CentralizedVerifier {
@@ -769,7 +841,9 @@ export function createVerifierHttpServer(options: VerifierHttpServerOptions): Se
         }
 
         const result = await options.verifier.verifyTask(body.taskId, {
-          markProofsConsumed: body.markProofsConsumed
+          markProofsConsumed: body.markProofsConsumed,
+          settle: body.settle,
+          waitForSettlement: body.waitForSettlement
         });
         writeJson(response, 200, result);
         return;
