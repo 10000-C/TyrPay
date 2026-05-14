@@ -180,6 +180,46 @@ describe("seller-skill", () => {
     assert.ok(names.includes("tyrpay_check_settlement"));
   });
 
+  it("accepts verifierSignerAddress as the commitment verifier signer", async () => {
+    const agent = createMockAgent();
+    const contract = createMockContract();
+    const tools = createSellerTools({
+      agent: agent as never,
+      contract: contract as never,
+      verifierSignerAddress: VERIFIER
+    });
+    const tool = tools.find((t) => t.name === "tyrpay_accept_task");
+    assert.ok(tool);
+
+    const result = (await tool.execute({
+      taskId: TASK_ID,
+      host: "api.openai.com",
+      path: "/v1/chat/completions",
+      method: "POST",
+      allowedModels: ["gpt-4o-mini"],
+      minTotalTokens: 500,
+      deadline: "1760000000000"
+    })) as AcceptTaskResult;
+
+    assert.equal((result.commitment as { verifier: string }).verifier, VERIFIER);
+  });
+
+  it("rejects missing verifier signer configuration", () => {
+    assert.throws(
+      () =>
+        createSellerTools({
+          agent: createMockAgent() as never,
+          contract: createMockContract() as never
+        }),
+      (error: Error) => {
+        assert.equal(error.constructor.name, "SellerSkillToolError");
+        const typed = error as SellerSkillToolError;
+        assert.equal(typed.code, "CONFIGURATION_ERROR");
+        return true;
+      }
+    );
+  });
+
   // --- tyrpay_ready ---
 
   it("tyrpay_ready returns signer address on success", async () => {

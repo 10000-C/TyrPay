@@ -13,7 +13,7 @@ contract, and access to the `@tyrpay/seller-skill` tool set.
 
 1. Install `@tyrpay/seller-skill`, `@tyrpay/seller-sdk`, a storage adapter, and a zkTLS adapter.
 2. Construct `SellerAgent` with a signer, settlement address, chain ID, storage adapter, and zkTLS adapter.
-3. Register `createSellerTools({ agent, contract, verifier })` with your tool-calling runtime.
+3. Register `createSellerTools({ agent, contract, verifierSignerAddress })` with your tool-calling runtime.
 4. Call `tyrpay_ready` before the first task workflow.
 5. Use `tyrpay_accept_task` when you receive a `taskId` from a buyer.
 
@@ -37,6 +37,9 @@ contract, and access to the `@tyrpay/seller-skill` tool set.
 
 - All tools reject malformed inputs with structured `SellerSkillToolError` errors.
 - `tyrpay_accept_task` reads the on-chain task to derive buyer and verifier addresses.
+- `verifierSignerAddress` is the registry-authorized verifier signer embedded
+  into `ExecutionCommitment.verifier`; it is not a settlement contract,
+  verifier registry, service URL, or verifier service contract address.
 - The readable settlement contract must expose `getTask(bytes32)` with the
   current `TyrPaySettlement.Task` field order:
   `taskId`, `taskNonce`, `buyer`, `seller`, `token`, `amount`, `deadlineMs`,

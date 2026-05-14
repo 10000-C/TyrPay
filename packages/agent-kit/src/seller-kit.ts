@@ -6,20 +6,20 @@ import type { ClaudeTool, OpenAITool } from "./types.js";
  * SellerKit wraps SellerAgent into a set of LLM-callable tools.
  *
  * Usage (Claude API):
- *   const kit = new SellerKit(agent, contract, verifierAddress);
+ *   const kit = new SellerKit(agent, contract, verifierSignerAddress);
  *   const response = await anthropic.messages.create({ tools: kit.tools, ... });
  *   const result = await kit.execute(toolUseBlock.name, toolUseBlock.input);
  *
  * Usage (OpenAI API):
- *   const kit = new SellerKit(agent, contract, verifierAddress);
+ *   const kit = new SellerKit(agent, contract, verifierSignerAddress);
  *   const response = await openai.chat.completions.create({ tools: kit.toOpenAIFormat(), ... });
  *   const result = await kit.execute(toolCall.function.name, JSON.parse(toolCall.function.arguments));
  */
 export class SellerKit {
   private readonly _tools: SellerTool[];
 
-  constructor(agent: SellerAgent, contract: ReadableContractLike, verifier: string) {
-    this._tools = createSellerTools({ agent, contract, verifier });
+  constructor(agent: SellerAgent, contract: ReadableContractLike, verifierSignerAddress: string) {
+    this._tools = createSellerTools({ agent, contract, verifierSignerAddress });
   }
 
   /** Tool definitions in Claude API format — pass directly to the `tools` field. */

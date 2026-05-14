@@ -60,7 +60,7 @@ Before calling `createSellerTools`, prepare:
   - `submitCommitment`
   - `submitProofBundle`
   - `getTask`
-- the verifier address that should be embedded into commitments
+- the registry-authorized verifier signer address that should be embedded into commitments
 
 ### Contract ABI compatibility
 
@@ -187,9 +187,15 @@ import { createSellerTools } from "@tyrpay/seller-skill";
 const tools = createSellerTools({
   agent,
   contract,
-  verifier: verifierAddress
+  verifierSignerAddress
 });
 ```
+
+`verifierSignerAddress` is the address that signs `VerificationReport` objects
+and is authorized by `VerifierRegistry`. It is not the settlement contract
+address, verifier registry contract address, verifier service URL, or a verifier
+service contract address. The legacy config field `verifier` is still accepted
+for compatibility, but it has the same signer-address meaning.
 
 Each returned tool has:
 
@@ -204,7 +210,7 @@ Each returned tool has:
 const claudeTools = createSellerTools({
   agent,
   contract,
-  verifier: verifierAddress
+  verifierSignerAddress
 }).map((tool) => ({
   name: tool.name,
   description: tool.description,
@@ -218,7 +224,7 @@ const claudeTools = createSellerTools({
 const openAITools = createSellerTools({
   agent,
   contract,
-  verifier: verifierAddress
+  verifierSignerAddress
 }).map((tool) => ({
   type: "function",
   function: {
@@ -235,7 +241,7 @@ const openAITools = createSellerTools({
 const tools = createSellerTools({
   agent,
   contract,
-  verifier: verifierAddress
+  verifierSignerAddress
 });
 
 const acceptTask = tools.find((entry) => entry.name === "tyrpay_accept_task");

@@ -14,6 +14,8 @@
 - Validation failures surface as `SellerSkillToolError` with stable fields:
   `code`, `message`, `field`, `received`, `suggestion`, `retryable`, `causeName`.
 - `tyrpay_accept_task` reads the on-chain task record to validate task existence before submission.
+- `ExecutionCommitment.verifier` is the registry-authorized verifier signer
+  address that signs `VerificationReport`; it is not a verifier contract address.
 - `tyrpay_execute_task` validates that `request.host`, `request.path`, and `request.method` match the commitment target.
 - `tyrpay_submit_proof` verifies storage hash integrity after upload.
 

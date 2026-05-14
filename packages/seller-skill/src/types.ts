@@ -38,8 +38,13 @@ export interface ReadableContractLike extends ContractLike {
 export interface SellerSkillConfig {
   agent: SellerAgent;
   contract: ReadableContractLike;
-  /** Address of the verifier contract used in commitments. */
-  verifier: string;
+  /** Registry-authorized verifier signer address embedded into ExecutionCommitment. */
+  verifierSignerAddress?: string;
+  /**
+   * @deprecated Use verifierSignerAddress. This is a verifier signer address,
+   * not a settlement contract, verifier registry, service URL, or verifier contract address.
+   */
+  verifier?: string;
 }
 
 // --- Seller-facing statuses ---

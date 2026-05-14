@@ -83,9 +83,10 @@ function mapSellerUserStatus(status: string): SellerStatusView {
 }
 
 export function createSellerTools(config: SellerSkillConfig): SellerTool[] {
-  const { agent, contract, verifier } = config;
+  const { agent, contract } = config;
+  const verifierSignerAddress = resolveVerifierSignerAddress(config);
   return [
-    acceptTaskTool(agent, contract, verifier),
+    acceptTaskTool(agent, contract, verifierSignerAddress),
     executeTaskTool(agent, contract),
     submitProofTool(agent, contract),
     checkSettlementTool(contract),
@@ -93,7 +94,26 @@ export function createSellerTools(config: SellerSkillConfig): SellerTool[] {
   ];
 }
 
-function acceptTaskTool(agent: SellerAgent, contract: ReadableContractLike, verifier: string): SellerTool<AcceptTaskResult> {
+function resolveVerifierSignerAddress(config: SellerSkillConfig): string {
+  const verifierSignerAddress = config.verifierSignerAddress ?? config.verifier;
+
+  if (!verifierSignerAddress) {
+    throw new SellerSkillToolError({
+      code: "CONFIGURATION_ERROR",
+      message: "createSellerTools requires verifierSignerAddress.",
+      suggestion: "Pass the registry-authorized verifier signer address, not a contract address or service URL.",
+      retryable: false
+    });
+  }
+
+  return verifierSignerAddress;
+}
+
+function acceptTaskTool(
+  agent: SellerAgent,
+  contract: ReadableContractLike,
+  verifierSignerAddress: string
+): SellerTool<AcceptTaskResult> {
   return {
     name: "tyrpay_accept_task",
     description:
@@ -132,7 +152,7 @@ function acceptTaskTool(agent: SellerAgent, contract: ReadableContractLike, veri
         const rawTask = normalizeRawOnChainTask(await contract.getTask(normalizeBytes32(i.taskId, "taskId")));
         const sellerAddress = normalizeAddress(await agent.signer.getAddress(), "seller");
         const buyerAddress = normalizeAddress(rawTask.buyer, "buyer");
-        const verifierAddress = normalizeAddress(verifier, "verifier");
+        const normalizedVerifierSignerAddress = normalizeAddress(verifierSignerAddress, "verifierSignerAddress");
         const taskId = normalizeBytes32(i.taskId, "taskId");
 
         const commitment: ExecutionCommitment = {
@@ -140,7 +160,7 @@ function acceptTaskTool(agent: SellerAgent, contract: ReadableContractLike, veri
           taskId,
           buyer: buyerAddress,
           seller: sellerAddress,
-          verifier: verifierAddress,
+          verifier: normalizedVerifierSignerAddress,
           target: {
             host: i.host,
             path: i.path,
