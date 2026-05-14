@@ -17,6 +17,21 @@
 - `tyrpay_execute_task` validates that `request.host`, `request.path`, and `request.method` match the commitment target.
 - `tyrpay_submit_proof` verifies storage hash integrity after upload.
 
+## Integration Requirements
+
+- The settlement contract ABI must match the current `TyrPaySettlement.Task`
+  struct order: `taskId`, `taskNonce`, `buyer`, `seller`, `token`, `amount`,
+  `deadlineMs`, `commitmentHash`, `commitmentURI`, `fundedAtMs`,
+  `proofBundleHash`, `proofBundleURI`, `proofSubmittedAtMs`, `reportHash`,
+  `settledAtMs`, `refundedAtMs`, `status`.
+- `MemoryStorageAdapter` and `memory://` URIs are valid only for local tests in
+  one process. Production or cross-agent flows need persistent retrievable
+  storage.
+- `commitmentHash` is the canonical hash of the complete
+  `ExecutionCommitment`. It cannot be recomputed from task fields alone.
+- Reclaim proof generation requires runtime installation of optional Reclaim
+  peer dependencies, credentials, and zk resource files.
+
 ## Seller-Facing Statuses
 
 - `READY_TO_ACCEPT`: buyer created the task, waiting for seller commitment.

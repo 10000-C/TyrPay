@@ -37,9 +37,33 @@ contract, and access to the `@tyrpay/seller-skill` tool set.
 
 - All tools reject malformed inputs with structured `SellerSkillToolError` errors.
 - `tyrpay_accept_task` reads the on-chain task to derive buyer and verifier addresses.
+- The readable settlement contract must expose `getTask(bytes32)` with the
+  current `TyrPaySettlement.Task` field order:
+  `taskId`, `taskNonce`, `buyer`, `seller`, `token`, `amount`, `deadlineMs`,
+  `commitmentHash`, `commitmentURI`, `fundedAtMs`, `proofBundleHash`,
+  `proofBundleURI`, `proofSubmittedAtMs`, `reportHash`, `settledAtMs`,
+  `refundedAtMs`, `status`.
 - `tyrpay_execute_task` requires the `commitment` object returned by `tyrpay_accept_task`.
 - `tyrpay_submit_proof` requires all receipts collected from `tyrpay_execute_task` calls.
 - Seller-facing statuses include `PAID` on successful settlement and `NOT_PAID_REFUNDED` on refund.
+
+## Failure Diagnosis
+
+- If the task exists, seller address matches, and buyer has funded but status or
+  commitment fields look wrong, first inspect the ABI used for `getTask()`. A
+  stale ABI or positional mapping can shift fields and make seller-skill parse
+  `commitmentHash`, timestamps, or `status` from the wrong slot.
+- Do not use `MemoryStorageAdapter` for a real multi-party flow. It returns
+  `memory://` URIs that only the same JavaScript process can read. Buyer and
+  verifier processes need persistent shared storage such as 0G, IPFS, or HTTP.
+- A commitment hash mismatch means the full canonical `ExecutionCommitment`
+  object is different from the object originally submitted. Chain data alone is
+  insufficient to reconstruct it; fetch it from `commitmentURI` or ask the
+  creator for the exact object.
+- `ReclaimZkTlsAdapter` needs `@reclaimprotocol/zk-fetch`,
+  `@reclaimprotocol/js-sdk`, credentials, and downloaded zk resources. Install
+  those optional peer dependencies in the runtime that constructs the adapter.
+  Windows runtimes must keep Reclaim TEE mode disabled.
 
 ## Resources
 

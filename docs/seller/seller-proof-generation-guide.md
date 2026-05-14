@@ -34,7 +34,7 @@ const agent = new SellerAgent({
   signer,
   settlementContract,
   chainId,
-  storageAdapter: new MemoryStorageAdapter(),
+  storageAdapter: new MemoryStorageAdapter(), // local tests only
   zkTlsAdapter: new ReclaimZkTlsAdapter({
     appId: process.env.RECLAIM_APP_ID,
     appSecret: process.env.RECLAIM_APP_SECRET,
@@ -50,6 +50,11 @@ Required fields:
 - `chainId`: target chain id
 - `storageAdapter`: where raw proofs, receipts, and bundles are stored
 - `zkTlsAdapter`: proof provider implementation, for example `ReclaimZkTlsAdapter`
+
+For live buyer/verifier flows, do not use `MemoryStorageAdapter`. It writes
+objects into process memory and returns `memory://` URIs that another process
+cannot fetch. Use a persistent shared adapter such as `ZeroGStorageAdapter`, or
+another adapter that returns retrievable `0g://`, `ipfs://`, or `https://` URIs.
 
 ### 2. `provenFetch` input
 
@@ -162,12 +167,23 @@ TEE note:
 
 Runtime requirements:
 
-- Install `@reclaimprotocol/zk-fetch` and `@reclaimprotocol/js-sdk`.
+- Install the optional Reclaim peer dependencies in the runtime that constructs
+  `ReclaimZkTlsAdapter`:
+
+```bash
+pnpm add @reclaimprotocol/zk-fetch @reclaimprotocol/js-sdk
+```
+
 - Download the Reclaim zk resources before production use:
 
 ```bash
 node node_modules/@reclaimprotocol/zk-fetch/scripts/download-files.js
 ```
+
+If `@reclaimprotocol/zk-fetch` cannot be installed or initialized in the runtime,
+`ReclaimZkTlsAdapter` cannot generate a real zkTLS proof. `MockZkTlsAdapter` is
+only a local testing substitute; it should not be used for payable tasks that a
+buyer or verifier expects to validate independently.
 
 ## Build the Final Proof Bundle
 
@@ -268,6 +284,34 @@ If these constraints are violated, `SellerAgent.provenFetch()` should reject bef
 5. Collect all returned `receipt` objects
 6. Build and upload one `ProofBundle`
 7. Submit the bundle hash and URI on-chain
+
+## Debugging Common Integration Failures
+
+### `getTask()` fields look shifted
+
+The contract ABI used by the seller runtime must match the deployed
+`TyrPaySettlement` struct exactly:
+
+```text
+taskId, taskNonce, buyer, seller, token, amount, deadlineMs,
+commitmentHash, commitmentURI, fundedAtMs,
+proofBundleHash, proofBundleURI, proofSubmittedAtMs,
+reportHash, settledAtMs, refundedAtMs, status
+```
+
+If an older ABI omits `taskNonce`, uses `deadline` instead of `deadlineMs`, or
+maps the ethers result by numeric indexes incorrectly, the seller skill can read
+the wrong `seller`, `commitmentHash`, or `status`. Compare the raw `getTask()`
+return value against this order before debugging the zkTLS layer.
+
+### Commitment hash mismatch
+
+`commitmentHash` is computed from the complete canonical `ExecutionCommitment`.
+It is not derivable from the on-chain task record by itself. To verify or resume
+a seller flow, fetch the object from `commitmentURI` and recompute
+`hashExecutionCommitment(commitment)`. If the commitment was originally stored
+with `memory://` in another process, the original object is unavailable unless
+that process exported it.
 
 ## Current Limits
 

@@ -18,6 +18,18 @@
   "dependencies": {
     "@tyrpay/sdk-core": "workspace:*"
   },
+  "peerDependencies": {
+    "@reclaimprotocol/js-sdk": "^5.4.0",
+    "@reclaimprotocol/zk-fetch": "^0.8.0"
+  },
+  "peerDependenciesMeta": {
+    "@reclaimprotocol/js-sdk": {
+      "optional": true
+    },
+    "@reclaimprotocol/zk-fetch": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^22.15.30"
   }

@@ -62,6 +62,41 @@ Before calling `createSellerTools`, prepare:
   - `getTask`
 - the verifier address that should be embedded into commitments
 
+### Contract ABI compatibility
+
+The `contract` passed to `createSellerTools` must use an ABI that matches the
+deployed `TyrPaySettlement` contract. In particular, `getTask(bytes32)` must
+return the current `Task` struct in this exact order:
+
+```text
+taskId, taskNonce, buyer, seller, token, amount, deadlineMs,
+commitmentHash, commitmentURI, fundedAtMs,
+proofBundleHash, proofBundleURI, proofSubmittedAtMs,
+reportHash, settledAtMs, refundedAtMs, status
+```
+
+Use this ABI fragment when constructing an ethers contract for seller-skill:
+
+```ts
+const TyrPaySettlementAbi = [
+  "function submitCommitment(bytes32 taskId,bytes32 commitmentHash,string commitmentURI)",
+  "function submitProofBundle(bytes32 taskId,bytes32 proofBundleHash,string proofBundleURI)",
+  "function getTask(bytes32 taskId) view returns ((bytes32 taskId, bytes32 taskNonce, address buyer, address seller, address token, uint256 amount, uint256 deadlineMs, bytes32 commitmentHash, string commitmentURI, uint256 fundedAtMs, bytes32 proofBundleHash, string proofBundleURI, uint256 proofSubmittedAtMs, bytes32 reportHash, uint256 settledAtMs, uint256 refundedAtMs, uint8 status))"
+];
+```
+
+If an older ABI has `deadline` instead of `deadlineMs`, omits `taskNonce`, or
+orders `commitmentHash` before `deadlineMs`, ethers can still return a value but
+seller-skill will read the wrong field names. Typical symptoms are:
+
+- `tyrpay_check_settlement` reports an impossible status.
+- `tyrpay_accept_task` reads the wrong buyer or seller.
+- `tyrpay_execute_task` cannot derive the expected task context.
+- Receipt `taskContext.commitmentHash` does not match the commitment used later.
+
+Do not rely on positional array indexes from `getTask()` unless you map them to
+the field names above before passing the contract into seller-skill.
+
 Minimal `SellerAgent` setup:
 
 ```ts
@@ -73,13 +108,74 @@ const agent = new SellerAgent({
   signer,
   settlementContract,
   chainId,
-  storageAdapter: new MemoryStorageAdapter(),
+  storageAdapter: new MemoryStorageAdapter(), // local tests only
   zkTlsAdapter: new ReclaimZkTlsAdapter({
     appId: process.env.RECLAIM_APP_ID,
     appSecret: process.env.RECLAIM_APP_SECRET
   })
 });
 ```
+
+## Environment Variables
+
+`seller-skill` itself does not read environment variables, but constructing the full
+seller stack requires the following values. The table groups them by component.
+
+### Settlement chain & wallet
+
+| Variable | Required | Description |
+|---|---|---|
+| `ZERO_G_EVM_RPC` | yes | EVM RPC endpoint for the settlement chain; also used by the 0G storage adapter |
+| `SELLER_PRIVATE_KEY` | yes | Private key of the seller wallet; used to sign on-chain transactions |
+| `CHAIN_ID` | yes | Settlement chain ID (must match the RPC endpoint) |
+| `SETTLEMENT_CONTRACT` | yes | Address of the deployed TyrPay settlement contract |
+
+### 0G storage adapter (production)
+
+Required if using `ZeroGStorageAdapter`. Omit if using `MemoryStorageAdapter` (testing only).
+
+| Variable | Required | Description |
+|---|---|---|
+| `ZERO_G_INDEXER_RPC` | yes | 0G indexer endpoint for storage reads |
+| `ZERO_G_STORAGE_PRIVATE_KEY` | yes | Private key for uploading proofs and receipts to 0G storage |
+
+`MemoryStorageAdapter` returns `memory://...` URIs. Those URIs are valid only
+inside the same JavaScript process that wrote the object. They must not be used
+for a task that the buyer, verifier, or another agent process needs to read.
+For real settlement flows, use persistent shared storage such as
+`ZeroGStorageAdapter` or another adapter that returns retrievable `0g://`,
+`ipfs://`, or `https://` URIs.
+
+### Reclaim zkTLS adapter (production)
+
+Required if using `ReclaimZkTlsAdapter`. Omit if using `MockZkTlsAdapter` (testing only).
+
+Install these optional peer dependencies in the runtime that constructs
+`ReclaimZkTlsAdapter`:
+
+```bash
+pnpm add @reclaimprotocol/zk-fetch @reclaimprotocol/js-sdk
+```
+
+| Variable | Required | Description |
+|---|---|---|
+| `RECLAIM_APP_ID` | yes | Reclaim protocol application ID |
+| `RECLAIM_APP_SECRET` | yes | Reclaim protocol application secret |
+
+### Upstream API key (runtime)
+
+Passed at call time through `providerOptions.privateOptions.headers`, not in constructor config.
+The key name depends on the upstream service being proven.
+
+| Variable | Required | Description |
+|---|---|---|
+| `OPENAI_API_KEY` | example | Bearer token for the upstream API (OpenAI shown as an example) |
+
+### Optional
+
+| Variable | Default | Description |
+|---|---|---|
+| `tyrpay_E2E_TIMING` | unset | Set to `"1"` to enable end-to-end timing logs in `SellerAgent.provenFetch()` |
 
 ## Basic Usage
 
@@ -278,10 +374,76 @@ Returns:
 ## Notes For Agent Authors
 
 - `taskNonce` for `tyrpay_execute_task` comes from the on-chain task record.
+- The `commitment` passed to `tyrpay_execute_task` and `tyrpay_submit_proof`
+  must be the exact object returned by `tyrpay_accept_task` or fetched from
+  the submitted `commitmentURI`. It cannot be reconstructed from `getTask()`
+  alone.
 - `declaredModel` must be included in `commitment.allowedModels`.
 - `request.host`, `request.path`, and `request.method` must match the commitment
   target exactly.
 - All tool inputs are validated at runtime before any SDK or on-chain calls.
+
+## Troubleshooting Seller Skill Runs
+
+### Seller address matches, buyer funded, task exists, but tool state is wrong
+
+Check the ABI used to construct the readable settlement contract. The current
+seller-skill expects named `getTask()` fields matching the contract struct order
+listed in [Contract ABI compatibility](#contract-abi-compatibility). A stale ABI
+can make `task.seller`, `task.commitmentHash`, `task.status`, or timestamp
+fields point at the wrong return slot.
+
+Quick checks:
+
+- Confirm the deployed contract is the current `TyrPaySettlement.sol`.
+- Confirm the ABI contains `taskNonce` and uses `deadlineMs`, `fundedAtMs`,
+  `proofSubmittedAtMs`, `settledAtMs`, and `refundedAtMs`.
+- Log the raw `getTask(taskId)` result and compare both named fields and numeric
+  indexes against the expected order.
+
+### `memory://` storage is rejected or cannot be read
+
+`memory://` is not a portable storage URI. It only works when every participant
+uses the same in-memory adapter instance in the same process. A buyer SDK,
+verifier service, or separate seller agent cannot retrieve it. Use 0G/IPFS/HTTP
+storage before writing hashes and URIs that other parties must verify.
+
+### Commitment hash mismatch
+
+`commitmentHash` is the canonical hash of the full `ExecutionCommitment`, not a
+hash derived from the on-chain task fields. The full object includes target
+host/path/method, allowed models, min usage, verifier, seller, buyer, deadline,
+schema version, and task id. Any missing field, case difference, changed model
+list order, timestamp change, or different canonical JSON payload changes the
+hash.
+
+To recover:
+
+1. Read `commitmentHash` and `commitmentURI` from `getTask(taskId)`.
+2. Fetch the full commitment object from `commitmentURI` using the same storage
+   adapter family that wrote it.
+3. Recompute `hashExecutionCommitment(commitment)`.
+4. Continue only if the recomputed hash equals the on-chain `commitmentHash`.
+
+If the original commitment was written to `memory://` by another process, it is
+not recoverable from chain data alone. The buyer or seller process that created
+the task must provide the original commitment object or submit a new task.
+
+### Reclaim zkTLS dependency or proof generation failure
+
+`ReclaimZkTlsAdapter` dynamically imports `@reclaimprotocol/zk-fetch` at
+runtime. Real Reclaim proofs require the package, `@reclaimprotocol/js-sdk`,
+valid `RECLAIM_APP_ID` and `RECLAIM_APP_SECRET`, and downloaded zk resources:
+
+```bash
+node node_modules/@reclaimprotocol/zk-fetch/scripts/download-files.js
+```
+
+On Windows, Reclaim TEE mode is not supported by `@reclaimprotocol/zk-fetch`;
+keep `useTee` unset or `false`. If the package cannot be installed in the
+current runtime, seller-skill cannot produce a real Reclaim zkTLS proof. Use
+`MockZkTlsAdapter` only for local tests, or switch to a runtime where Reclaim
+dependencies install and initialize successfully.
 
 ## Related Packages
 
