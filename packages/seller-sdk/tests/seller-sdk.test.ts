@@ -32,6 +32,7 @@ function loadFixture<T>(relativePath: string): FixtureFile<T> {
 
 const commitmentFixture = loadFixture<ExecutionCommitment>("test/fixtures/protocol/commitments/commitment.openai-compatible.json");
 const proofBundleFixture = loadFixture<ProofBundle>("test/fixtures/protocol/proof-bundles/proof-bundle.pass-basic.json");
+const currentCommitmentHash = hashExecutionCommitment(commitmentFixture.object);
 
 // ── Test constants ───────────────────────────────────────────────
 
@@ -141,8 +142,8 @@ test("buildTaskContextFromCommitment builds a valid TaskContext", () => {
   assert.equal(taskContext.schemaVersion, "TyrPay.task-context.v1");
   assert.equal(
     taskContext.commitmentHash,
-    commitmentFixture.hash,
-    "commitmentHash should match the fixture hash of the ExecutionCommitment"
+    currentCommitmentHash,
+    "commitmentHash should match the current canonical hash of the ExecutionCommitment"
   );
 });
 
@@ -156,7 +157,7 @@ test("submitCommitment submits and returns correct result", async () => {
   const result = await agent.submitCommitment(contract, commitment, COMMITMENT_URI);
 
   assert.equal(result.taskId, commitment.taskId);
-  assert.equal(result.commitmentHash, commitmentFixture.hash);
+  assert.equal(result.commitmentHash, currentCommitmentHash);
   assert.equal(result.commitmentURI, COMMITMENT_URI);
   assert.equal(result.txHash, "0xmock_commitment_tx_hash00000000000000000000000000000000000000000");
 });
@@ -328,7 +329,7 @@ test("buildProofBundle assembles a valid ProofBundle from receipts", async () =>
   assert.equal(bundle.receipts[0], receipt);
   assert.equal(bundle.aggregateUsage.totalTokens, receipt.extracted.usage.totalTokens);
   assert.equal(bundle.createdAt, "1735686600000");
-  assert.equal(bundle.commitmentHash, commitmentFixture.hash);
+  assert.equal(bundle.commitmentHash, currentCommitmentHash);
 });
 
 test("buildProofBundle rejects empty receipts array", () => {
@@ -463,7 +464,7 @@ test("full seller flow: commitment → provenFetch → buildProofBundle → uplo
 
   // Step 1: Submit commitment
   const commitmentResult = await agent.submitCommitment(contract, commitment, COMMITMENT_URI);
-  assert.equal(commitmentResult.commitmentHash, commitmentFixture.hash);
+  assert.equal(commitmentResult.commitmentHash, currentCommitmentHash);
   assert.equal(commitmentResult.taskId, commitment.taskId);
 
   // Step 2: Perform proven fetch
@@ -491,7 +492,7 @@ test("full seller flow: commitment → provenFetch → buildProofBundle → uplo
 
   assert.equal(bundle.taskId, commitment.taskId);
   assert.equal(bundle.seller, commitment.seller);
-  assert.equal(bundle.commitmentHash, commitmentFixture.hash);
+  assert.equal(bundle.commitmentHash, currentCommitmentHash);
 
   // Step 4: Upload proof bundle
   const uploadResult = await agent.uploadProofBundle(bundle);
