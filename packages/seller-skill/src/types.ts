@@ -32,7 +32,7 @@ export interface RawOnChainTask {
 
 /** ContractLike extended with a read-only getTask method for seller-side queries. */
 export interface ReadableContractLike extends ContractLike {
-  getTask(taskId: string): Promise<RawOnChainTask>;
+  getTask(taskId: string): Promise<unknown>;
 }
 
 export interface SellerSkillConfig {

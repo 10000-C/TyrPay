@@ -1,6 +1,6 @@
 {
   "name": "@tyrpay/seller-skill",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
@@ -24,7 +24,8 @@
   },
   "dependencies": {
     "@tyrpay/sdk-core": "workspace:*",
-    "@tyrpay/seller-sdk": "workspace:*"
+    "@tyrpay/seller-sdk": "workspace:*",
+    "ethers": "^6.16.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.30"

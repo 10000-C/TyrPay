@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { SellerSkillToolError, createSellerTools } from "../src/index.js";
+import { SellerSkillToolError, TYRPAY_SETTLEMENT_ABI, createSellerTools, normalizeRawOnChainTask } from "../src/index.js";
 import type { AcceptTaskResult, ReadyResult } from "../src/index.js";
 
 const TASK_ID = "0x" + "a".repeat(64);
@@ -9,6 +9,7 @@ const TASK_NONCE = "0x" + "b".repeat(64);
 const SELLER = "0x1111111111111111111111111111111111111111";
 const BUYER = "0x2222222222222222222222222222222222222222";
 const VERIFIER = "0x3333333333333333333333333333333333333333";
+const TOKEN = "0x4444444444444444444444444444444444444444";
 const COMMITMENT_HASH = "0x" + "c".repeat(64);
 const ZERO_HASH = "0x" + "0".repeat(64);
 
@@ -71,7 +72,7 @@ function createMockContract(taskOverrides: Partial<Record<string, unknown>> = {}
         taskNonce: TASK_NONCE,
         buyer: BUYER,
         seller: SELLER,
-        token: "0xtoken" + "a".repeat(56),
+        token: TOKEN,
         amount: 1000n,
         deadlineMs: 1760000000000n,
         commitmentHash: COMMITMENT_HASH,
@@ -108,6 +109,48 @@ function createTestTools(taskOverrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe("seller-skill", () => {
+  it("exports the tuple settlement ABI expected by ethers v6", () => {
+    assert.ok(TYRPAY_SETTLEMENT_ABI.some((entry) => entry.includes("getTask(bytes32 taskId) view returns ((")));
+  });
+
+  it("normalizes getTask tuple-like results by the contract struct order", () => {
+    const task = normalizeRawOnChainTask([
+      TASK_ID,
+      TASK_NONCE,
+      BUYER.toUpperCase(),
+      SELLER.toUpperCase(),
+      TOKEN,
+      1000n,
+      1760000000000n,
+      COMMITMENT_HASH,
+      "memory://commitment",
+      1759000000000n,
+      ZERO_HASH,
+      "",
+      0n,
+      ZERO_HASH,
+      0n,
+      0n,
+      2n
+    ]);
+
+    assert.equal(task.buyer, BUYER);
+    assert.equal(task.seller, SELLER);
+    assert.equal(task.status, 2n);
+  });
+
+  it("reports ABI configuration errors for malformed getTask results", () => {
+    assert.throws(
+      () => normalizeRawOnChainTask({ taskId: TASK_ID }),
+      (error: Error) => {
+        assert.equal(error.constructor.name, "SellerSkillToolError");
+        const typed = error as SellerSkillToolError;
+        assert.equal(typed.code, "CONFIGURATION_ERROR");
+        return true;
+      }
+    );
+  });
+
   it("exports 5 tools including tyrpay_ready", () => {
     const { tools } = createTestTools();
     assert.equal(tools.length, 5);

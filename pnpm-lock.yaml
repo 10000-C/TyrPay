@@ -226,6 +226,9 @@ importers:
       '@tyrpay/seller-sdk':
         specifier: workspace:*
         version: link:../seller-sdk
+      ethers:
+        specifier: ^6.16.0
+        version: 6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
     devDependencies:
       '@types/node':
         specifier: ^22.15.30

@@ -26,8 +26,8 @@ import {
   validateExecuteTaskInput,
   validateSubmitProofInput
 } from "./validation.js";
+import { isEmptyBytes32, normalizeRawOnChainTask } from "./contract.js";
 
-const ZERO_HASH = "0x" + "0".repeat(64);
 const TASK_STATUS_NAMES = [
   "INTENT_CREATED",
   "COMMITMENT_SUBMITTED",
@@ -124,7 +124,7 @@ function acceptTaskTool(agent: SellerAgent, contract: ReadableContractLike, veri
       try {
         const i = validateAcceptTaskInput(input);
 
-        const rawTask = await contract.getTask(normalizeBytes32(i.taskId, "taskId"));
+        const rawTask = normalizeRawOnChainTask(await contract.getTask(normalizeBytes32(i.taskId, "taskId")));
         const sellerAddress = normalizeAddress(await agent.signer.getAddress(), "seller");
         const buyerAddress = normalizeAddress(rawTask.buyer, "buyer");
         const verifierAddress = normalizeAddress(verifier, "verifier");
@@ -312,7 +312,7 @@ function checkSettlementTool(contract: ReadableContractLike): SellerTool<CheckSe
     async execute(input: unknown) {
       try {
         const i = validateCheckSettlementInput(input);
-        const task = await contract.getTask(normalizeBytes32(i.taskId, "taskId"));
+        const task = normalizeRawOnChainTask(await contract.getTask(normalizeBytes32(i.taskId, "taskId")));
         const statusCode = Number(task.status);
         const status = TASK_STATUS_NAMES[statusCode] ?? "UNKNOWN";
 
@@ -322,11 +322,11 @@ function checkSettlementTool(contract: ReadableContractLike): SellerTool<CheckSe
           settled: status === "SETTLED",
           refunded: status === "REFUNDED",
           proofSubmittedAt: task.proofSubmittedAtMs > 0n ? task.proofSubmittedAtMs.toString() : null,
-          proofBundleHash: task.proofBundleHash !== ZERO_HASH ? task.proofBundleHash : null,
+          proofBundleHash: !isEmptyBytes32(task.proofBundleHash) ? task.proofBundleHash : null,
           proofBundleURI: task.proofBundleURI || null,
           settledAt: task.settledAtMs > 0n ? task.settledAtMs.toString() : null,
           refundedAt: task.refundedAtMs > 0n ? task.refundedAtMs.toString() : null,
-          reportHash: task.reportHash !== ZERO_HASH ? task.reportHash : null,
+          reportHash: !isEmptyBytes32(task.reportHash) ? task.reportHash : null,
           ...mapSellerUserStatus(status)
         };
       } catch (error) {
