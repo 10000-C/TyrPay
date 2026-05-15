@@ -51,7 +51,8 @@ export function validatePostTaskInput(input: unknown): PostTaskInput {
     );
   }
 
-  const expectations = object.expectations === undefined ? undefined : validateExpectations(object.expectations, "expectations");
+  const expectations =
+    object.expectations === undefined ? undefined : validateExpectations(object.expectations, "expectations", !createOnly);
 
   return {
     seller: normalizeAddressField(expectString(object.seller, "seller"), "seller"),
@@ -83,7 +84,7 @@ export function validateFundTaskInput(input: unknown): FundTaskInput {
 
   return {
     taskId: normalizeBytes32Field(expectString(object.taskId, "taskId"), "taskId"),
-    expectations: validateExpectations(object.expectations, "expectations")
+    expectations: validateExpectations(object.expectations, "expectations", true)
   };
 }
 
@@ -128,11 +129,11 @@ export function validateListTasksInput(input: unknown): ListTasksInput {
   };
 }
 
-function validateExpectations(input: unknown, fieldName: string): CommitmentExpectations {
+function validateExpectations(input: unknown, fieldName: string, requireEffectiveConstraint: boolean): CommitmentExpectations {
   const object = expectObject(input, fieldName);
   assertNoAdditionalProperties(object, EXPECTATION_KEYS, fieldName);
 
-  return {
+  const expectations = {
     ...(object.acceptedHosts !== undefined ? { acceptedHosts: expectStringArray(object.acceptedHosts, `${fieldName}.acceptedHosts`) } : {}),
     ...(object.acceptedPaths !== undefined ? { acceptedPaths: expectStringArray(object.acceptedPaths, `${fieldName}.acceptedPaths`) } : {}),
     ...(object.acceptedMethods !== undefined
@@ -152,6 +153,34 @@ function validateExpectations(input: unknown, fieldName: string): CommitmentExpe
       ? { nowMs: normalizeUIntField(expectString(object.nowMs, `${fieldName}.nowMs`), `${fieldName}.nowMs`) }
       : {})
   };
+
+  if (requireEffectiveConstraint && !hasEffectiveExpectationConstraint(expectations)) {
+    throw validationError(
+      "Expected expectations to include at least one effective commitment constraint.",
+      fieldName,
+      input,
+      "Set an allowed host, path, method, model, verifier, positive minTotalTokens, requireNonZeroMinUsage=true, or nowMs."
+    );
+  }
+
+  return expectations;
+}
+
+function hasEffectiveExpectationConstraint(expectations: CommitmentExpectations): boolean {
+  return (
+    hasNonEmptyArray(expectations.acceptedHosts) ||
+    hasNonEmptyArray(expectations.acceptedPaths) ||
+    hasNonEmptyArray(expectations.acceptedMethods) ||
+    hasNonEmptyArray(expectations.acceptedModels) ||
+    expectations.expectedVerifier !== undefined ||
+    (expectations.minTotalTokens !== undefined && expectations.minTotalTokens > 0) ||
+    expectations.requireNonZeroMinUsage === true ||
+    expectations.nowMs !== undefined
+  );
+}
+
+function hasNonEmptyArray(values: string[] | undefined): boolean {
+  return values !== undefined && values.length > 0;
 }
 
 function normalizeAddressField(value: string, fieldName: string): string {

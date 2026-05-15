@@ -145,6 +145,68 @@ describe("buyer-skill", () => {
     assert.equal(getValidateCount(), 1);
   });
 
+  it("rejects funding when expectations contain no effective constraints", async () => {
+    const tool = createBuyerTools(createMockSdk().sdk as never).find((entry) => entry.name === "tyrpay_fund_task");
+
+    assert.ok(tool);
+
+    for (const expectations of [
+      {},
+      { acceptedHosts: [] },
+      { acceptedHosts: [], acceptedModels: [] },
+      { minTotalTokens: 0 },
+      { requireNonZeroMinUsage: false }
+    ]) {
+      await assert.rejects(
+        () => tool.execute({ taskId: TASK_ID, expectations }),
+        (error: Error) => {
+          const typed = error as BuyerSkillToolError;
+          assert.equal(typed.code, "VALIDATION_ERROR");
+          assert.equal(typed.field, "expectations");
+          return true;
+        }
+      );
+    }
+  });
+
+  it("allows createOnly post_task without effective expectations", async () => {
+    const tool = createBuyerTools(createMockSdk().sdk as never).find((entry) => entry.name === "tyrpay_post_task");
+
+    assert.ok(tool);
+
+    const result = (await tool.execute({
+      seller: SELLER,
+      token: TOKEN,
+      amount: "1000",
+      deadline: "1760000000000",
+      createOnly: true,
+      expectations: {}
+    })) as PostTaskResult;
+
+    assert.equal("fundTxHash" in result, false);
+    assert.equal(result.userStatus, "WAITING_FOR_SELLER");
+  });
+
+  it("exposes createOnly and nowMs in post_task schema", () => {
+    const tool = createBuyerTools(createMockSdk().sdk as never).find((entry) => entry.name === "tyrpay_post_task");
+
+    assert.ok(tool);
+
+    const schema = tool.inputSchema as {
+      properties: {
+        createOnly?: unknown;
+        expectations?: {
+          properties?: {
+            nowMs?: unknown;
+          };
+        };
+      };
+    };
+
+    assert.ok(schema.properties.createOnly);
+    assert.ok(schema.properties.expectations?.properties?.nowMs);
+  });
+
   it("rejects list_tasks requests beyond the declared batch size", async () => {
     const tool = createBuyerTools(createMockSdk().sdk as never).find((entry) => entry.name === "tyrpay_list_tasks");
 

@@ -135,7 +135,8 @@ function postTaskTool(sdk: BuyerSdk): BuyerTool<PostTaskResult> {
             acceptedModels: { type: "array", items: { type: "string" }, description: "Allowed AI model names" },
             expectedVerifier: { type: "string", description: "Required verifier address" },
             minTotalTokens: { type: "number", description: "Minimum required minUsage.totalTokens" },
-            requireNonZeroMinUsage: { type: "boolean" }
+            requireNonZeroMinUsage: { type: "boolean" },
+            nowMs: { type: "string", description: "Optional current time as Unix milliseconds string for deadline enforcement" }
           },
           additionalProperties: false
         },
@@ -146,6 +147,10 @@ function postTaskTool(sdk: BuyerSdk): BuyerTool<PostTaskResult> {
         timeoutMs: {
           type: "number",
           description: `Max ms to wait for the seller response before giving up (default ${DEFAULT_TIMEOUT_MS})`
+        },
+        createOnly: {
+          type: "boolean",
+          description: "Create the task intent without waiting for seller commitment or locking payment"
         }
       },
       additionalProperties: false

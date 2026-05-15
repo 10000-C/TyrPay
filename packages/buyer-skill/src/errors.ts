@@ -33,13 +33,13 @@ export class BuyerSkillToolError extends Error implements BuyerSkillErrorShape {
   }
 }
 
-export function validationError(message: string, field: string, received?: unknown): BuyerSkillToolError {
+export function validationError(message: string, field: string, received?: unknown, suggestion = "Fix the tool arguments and try again."): BuyerSkillToolError {
   return new BuyerSkillToolError({
     code: "VALIDATION_ERROR",
     message,
     field,
     received,
-    suggestion: "Fix the tool arguments and try again.",
+    suggestion,
     retryable: false
   });
 }
