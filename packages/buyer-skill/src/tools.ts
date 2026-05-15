@@ -126,7 +126,8 @@ function postTaskTool(sdk: BuyerSdk): BuyerTool<PostTaskResult> {
         expectations: {
           type: "object",
           description:
-            "Optional commitment validation constraints. If the seller responds with terms outside these constraints, the tool throws.",
+            "Commitment validation constraints. Required when createOnly is not true. " +
+            "If the seller responds with terms outside these constraints, the tool throws before funding.",
           properties: {
             acceptedHosts: { type: "array", items: { type: "string" }, description: "Allowed API hosts" },
             acceptedPaths: { type: "array", items: { type: "string" }, description: "Allowed API paths" },
@@ -190,7 +191,7 @@ async function executePostTask(sdk: BuyerSdk, input: PostTaskInput): Promise<Pos
     if (task.commitmentHash && task.commitmentURI) {
       const fundResult = await executeFundTask(sdk, {
         taskId,
-        ...(input.expectations ? { expectations: input.expectations } : {})
+        expectations: input.expectations!
       });
       return {
         taskId,
@@ -229,12 +230,14 @@ function fundTaskTool(sdk: BuyerSdk): BuyerTool<FundTaskResult> {
       "Use this when you created a task with createOnly=true, when tyrpay_post_task timed out, or when you want funding to be a separate explicit step.",
     inputSchema: {
       type: "object",
-      required: ["taskId"],
+      required: ["taskId", "expectations"],
       properties: {
         taskId: { type: "string", description: "The bytes32 task ID to fund" },
         expectations: {
           type: "object",
-          description: "Optional commitment validation constraints to enforce before payment is locked.",
+          description:
+            "Commitment validation constraints to enforce before payment is locked. " +
+            "Required — funding without validating the seller's commitment could lock funds under unintended terms.",
           properties: {
             acceptedHosts: { type: "array", items: { type: "string" }, description: "Allowed API hosts" },
             acceptedPaths: { type: "array", items: { type: "string" }, description: "Allowed API paths" },

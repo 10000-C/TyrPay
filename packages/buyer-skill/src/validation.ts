@@ -40,6 +40,17 @@ export function validatePostTaskInput(input: unknown): PostTaskInput {
   const object = expectObject(input, "input");
   assertNoAdditionalProperties(object, POST_TASK_KEYS, "input");
 
+  const createOnly = object.createOnly !== undefined ? expectBoolean(object.createOnly, "createOnly") : false;
+
+  if (!createOnly && object.expectations === undefined) {
+    throw validationError(
+      "expectations is required when createOnly is not true. " +
+        "Pass expectations to validate the seller's commitment before funding, or set createOnly=true to create without funding.",
+      "expectations",
+      object.expectations
+    );
+  }
+
   const expectations = object.expectations === undefined ? undefined : validateExpectations(object.expectations, "expectations");
 
   return {
@@ -54,7 +65,7 @@ export function validatePostTaskInput(input: unknown): PostTaskInput {
     ...(expectations ? { expectations } : {}),
     ...(object.pollIntervalMs !== undefined ? { pollIntervalMs: expectPositiveInteger(object.pollIntervalMs, "pollIntervalMs") } : {}),
     ...(object.timeoutMs !== undefined ? { timeoutMs: expectPositiveInteger(object.timeoutMs, "timeoutMs") } : {}),
-    ...(object.createOnly !== undefined ? { createOnly: expectBoolean(object.createOnly, "createOnly") } : {})
+    ...(createOnly ? { createOnly } : {})
   };
 }
 
@@ -62,9 +73,17 @@ export function validateFundTaskInput(input: unknown): FundTaskInput {
   const object = expectObject(input, "input");
   assertNoAdditionalProperties(object, FUND_TASK_KEYS, "input");
 
+  if (object.expectations === undefined) {
+    throw validationError(
+      "expectations is required. Pass expectations to validate the seller's commitment before locking payment.",
+      "expectations",
+      object.expectations
+    );
+  }
+
   return {
     taskId: normalizeBytes32Field(expectString(object.taskId, "taskId"), "taskId"),
-    ...(object.expectations !== undefined ? { expectations: validateExpectations(object.expectations, "expectations") } : {})
+    expectations: validateExpectations(object.expectations, "expectations")
   };
 }
 

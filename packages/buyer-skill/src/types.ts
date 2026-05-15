@@ -56,7 +56,7 @@ export interface PostTaskResult extends BuyerStatusView {
 
 export interface FundTaskInput {
   taskId: string;
-  expectations?: CommitmentExpectations;
+  expectations: CommitmentExpectations;
 }
 
 export interface FundTaskResult extends BuyerStatusView {

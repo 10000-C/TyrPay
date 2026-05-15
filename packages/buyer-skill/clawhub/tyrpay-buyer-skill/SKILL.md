@@ -15,7 +15,7 @@ It assumes the runtime already has a configured `BuyerSdk` and access to the
 2. Construct `BuyerSdk` with a signer, settlement address, and storage adapter.
 3. Register `createBuyerTools(sdk)` with your tool-calling runtime.
 4. Call `tyrpay_ready` before the first paid workflow.
-5. Use `tyrpay_post_task` for the default flow, or `createOnly: true` plus `tyrpay_fund_task` for explicit control.
+5. Use `tyrpay_post_task` with `expectations` for the default flow, or `createOnly: true` plus `tyrpay_fund_task` (with `expectations`) for explicit control.
 
 ## When To Use
 
@@ -27,18 +27,19 @@ It assumes the runtime already has a configured `BuyerSdk` and access to the
 ## Workflow
 
 1. Run `tyrpay_ready` to verify signer and provider connectivity.
-2. Call `tyrpay_post_task`.
-3. If you need explicit orchestration, set `createOnly: true`.
-4. If the seller commitment already exists, call `tyrpay_fund_task`.
+2. Call `tyrpay_post_task` with `expectations` describing the acceptable commitment terms.
+3. If you need explicit orchestration, set `createOnly: true` (no `expectations` needed at creation).
+4. When the seller commitment is ready, call `tyrpay_fund_task` with `expectations` to validate and fund.
 5. Use `tyrpay_check_task` or `tyrpay_list_tasks` to monitor progress.
 6. If proof submission or verification stalls past protocol timeouts, call `tyrpay_refund_task`.
 
-## Critical Safety Rule
+## Mandatory Expectations
 
-- **The on-chain protocol does not enforce that the seller's commitment matches the buyer's requirements.**
+- **`expectations` is required on every funding path.**
+  `tyrpay_fund_task` always requires it. `tyrpay_post_task` requires it unless `createOnly: true`.
+- The on-chain protocol does **not** enforce that the seller's commitment matches the buyer's requirements.
   The chain only records the commitment; it does not validate host, path, models, minimum usage, verifier, or deadline against the buyer's intent.
-- **Always pass `expectations` when funding a task** (via `tyrpay_post_task` or `tyrpay_fund_task`) so that the SDK validates the seller's commitment before locking payment.
-  Without expectations, a malicious or misconfigured seller can commit to arbitrary terms and the buyer's funds will be locked.
+- The skill layer rejects any funding call that omits `expectations`, preventing the agent from locking funds under unintended terms.
 
 ## Tooling Notes
 

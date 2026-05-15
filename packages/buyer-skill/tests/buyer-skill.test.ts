@@ -100,7 +100,8 @@ describe("buyer-skill", () => {
           seller: "not-an-address",
           token: TOKEN,
           amount: "1000",
-          deadline: "1760000000000"
+          deadline: "1760000000000",
+          createOnly: true
         }),
       (error: Error) => {
         assert.equal(error.constructor.name, "BuyerSkillToolError");
@@ -135,7 +136,10 @@ describe("buyer-skill", () => {
 
     assert.ok(tool);
 
-    const result = (await tool.execute({ taskId: TASK_ID })) as FundTaskResult;
+    const result = (await tool.execute({
+      taskId: TASK_ID,
+      expectations: { acceptedModels: ["gpt-4.1-mini"] }
+    })) as FundTaskResult;
     assert.equal(result.fundTxHash, "0xfund");
     assert.equal(result.userStatus, "IN_PROGRESS");
     assert.equal(getValidateCount(), 1);
