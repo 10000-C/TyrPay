@@ -1,6 +1,6 @@
 {
   "name": "tyrpay-buyer-skill",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Buyer-side TyrPay workflow bundle for LLM agents.",
   "entrypoint": "SKILL.md",
   "tags": ["tyrpay", "payments", "evm", "agents", "buyer"],
