@@ -31,13 +31,19 @@ export default function TyrPayLanding() {
             <a href="#what-next" className="text-slate-400 hover:text-white transition-colors">Roadmap</a>
           </div>
           <div className="flex items-center space-x-4">
-            <a href="https://github.com/10000-C/TyrPay" target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-slate-400 hover:text-white transition group">
+            <a href="https://github.com/10000-C/TyrPay" target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-slate-400 hover:text-white transition group mr-2">
               <GithubIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
             </a>
-            <a href="https://clawhub.com" target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-full p-[1px]">
+            <a href="https://clawhub.ai/10000-c/tyrpay-buyer-skill" target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-full p-[1px]">
+              <span className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
+              <div className="relative bg-[#020617] px-4 py-1.5 rounded-full text-xs font-semibold text-white transition-all duration-300 group-hover:bg-opacity-0 group-hover:text-white flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5" /> Buyer Skill
+              </div>
+            </a>
+            <a href="https://clawhub.ai/10000-c/tyrpay-seller-skill" target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-full p-[1px]">
               <span className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-cyan-500 rounded-full opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
-              <div className="relative bg-[#020617] px-5 py-2 rounded-full text-sm font-semibold text-white transition-all duration-300 group-hover:bg-opacity-0 group-hover:text-slate-900">
-                ClawHub
+              <div className="relative bg-[#020617] px-4 py-1.5 rounded-full text-xs font-semibold text-white transition-all duration-300 group-hover:bg-opacity-0 group-hover:text-white flex items-center gap-1.5">
+                <Workflow className="w-3.5 h-3.5" /> Seller Skill
               </div>
             </a>
           </div>
@@ -315,11 +321,14 @@ console.<span className="text-sky-300">log</span>(<span className="text-emerald-
             </div>
             
             <div className="flex space-x-4">
-              <a href="https://github.com/10000-C/TyrPay" target="_blank" rel="noopener noreferrer" className="p-3 rounded-full bg-slate-900 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800 transition-colors group">
+              <a href="https://github.com/10000-C/TyrPay" target="_blank" rel="noopener noreferrer" title="GitHub Repository" className="p-3 rounded-full bg-slate-900 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800 transition-colors group">
                 <GithubIcon className="w-5 h-5 text-slate-400 group-hover:text-emerald-400" />
               </a>
-              <a href="https://clawhub.com" target="_blank" rel="noopener noreferrer" className="p-3 rounded-full bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-800 transition-colors group flex items-center justify-center">
+              <a href="https://clawhub.ai/10000-c/tyrpay-buyer-skill" target="_blank" rel="noopener noreferrer" title="Buyer Skill on ClawHub" className="p-3 rounded-full bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-800 transition-colors group flex items-center justify-center">
                 <Layers className="w-5 h-5 text-slate-400 group-hover:text-cyan-400" />
+              </a>
+              <a href="https://clawhub.ai/10000-c/tyrpay-seller-skill" target="_blank" rel="noopener noreferrer" title="Seller Skill on ClawHub" className="p-3 rounded-full bg-slate-900 border border-slate-800 hover:border-blue-500/50 hover:bg-slate-800 transition-colors group flex items-center justify-center">
+                <Workflow className="w-5 h-5 text-slate-400 group-hover:text-blue-400" />
               </a>
             </div>
           </div>
