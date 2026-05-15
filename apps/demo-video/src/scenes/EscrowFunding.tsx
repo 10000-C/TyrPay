@@ -59,7 +59,6 @@ export const EscrowFunding = () => {
     config: {damping: 18, stiffness: 135},
   });
   const railOpacity = fade(frame, 96);
-  const captionOpacity = fade(frame, 190);
   const statusOpacity = fade(frame, 150);
 
   return (
@@ -70,13 +69,10 @@ export const EscrowFunding = () => {
       <header style={styles.topbar}>
         <div style={styles.brand}>
           <div style={styles.mark}>
-            <svg viewBox="0 0 24 24" width="30" height="30">
-              <path d="M13 2 4 14h7l-1 8 10-13h-7V2Z" fill="currentColor" />
-            </svg>
+            <Img src={staticFile('logo.png')} style={{width: 30, height: 30, objectFit: 'contain'}} />
           </div>
           <span>TyrPay</span>
         </div>
-        <div style={styles.shotLabel}>Scene 05 / Escrow funding</div>
       </header>
 
       <section style={styles.titleBlock}>
@@ -87,11 +83,12 @@ export const EscrowFunding = () => {
 
       <div style={styles.buyerWrap}>
         <Img src={staticFile('characters/buyer.svg')} style={styles.buyer} />
-        <div style={styles.buyerLabel}>Buyer accepts commitment</div>
+        <div style={styles.buyerLabel}>Buyer</div>
       </div>
 
       <div style={styles.sellerWrap}>
         <Img src={staticFile('characters/honest_seller.svg')} style={styles.seller} />
+        <div style={styles.sellerLabel}>Honest Seller</div>
         <SellerWallet opacity={statusOpacity} />
       </div>
 
@@ -118,13 +115,6 @@ export const EscrowFunding = () => {
 
       <EscrowRail opacity={railOpacity} progress={interp(frame, [104, 244], [0, 1])} frame={frame} />
 
-      <footer style={{...styles.caption, opacity: captionOpacity}}>
-        <span style={styles.captionText}>Funds enter the 0G Chain contract, not the seller wallet.</span>
-        <span style={styles.voiceover}>
-          The buyer accepts the commitment and locks funds into the TyrPay contract on 0G Chain. The seller has not
-          been paid yet.
-        </span>
-      </footer>
       <SceneProgress current={4} />
     </AbsoluteFill>
   );
@@ -156,7 +146,7 @@ const EscrowVault = ({locked, frame}: {locked: number; frame: number}) => (
       }}
     >
       <span style={styles.gateShieldKicker}>TyrPay Escrow</span>
-      <strong style={styles.gateShieldTitle}>0G Custody Shield</strong>
+      <strong style={styles.gateShieldTitle}>0G Chain Escrow</strong>
       <div
         style={{
           ...styles.vaultRing,
@@ -174,7 +164,7 @@ const EscrowVault = ({locked, frame}: {locked: number; frame: number}) => (
         LOCKED
       </div>
     </div>
-    <div style={styles.gateFoot}>0G Chain custody</div>
+    <div style={styles.gateFoot}>0G Chain escrow</div>
   </div>
 );
 
@@ -314,17 +304,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: `linear-gradient(135deg, #fbbf24, ${C.amber})`,
     boxShadow: '0 0 34px rgba(245,158,11,0.44)',
   },
-  shotLabel: {
-    padding: '10px 14px',
-    border: '1px solid rgba(148,163,184,0.18)',
-    borderRadius: 999,
-    background: 'rgba(15,23,42,0.72)',
-    color: '#dbeafe',
-    fontSize: 14,
-    fontWeight: 850,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-  },
   titleBlock: {
     position: 'absolute',
     left: 68,
@@ -394,6 +373,20 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     objectFit: 'contain',
     filter: 'drop-shadow(0 30px 60px rgba(0,0,0,0.45))',
+  },
+  sellerLabel: {
+    position: 'absolute',
+    left: 108,
+    top: -10,
+    padding: '8px 12px',
+    border: '1px solid rgba(16,185,129,0.34)',
+    borderRadius: 999,
+    background: 'rgba(5,46,22,0.68)',
+    color: '#bbf7d0',
+    fontSize: 13,
+    fontWeight: 900,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
   },
   sellerWallet: {
     position: 'absolute',

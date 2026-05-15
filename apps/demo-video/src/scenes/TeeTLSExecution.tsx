@@ -69,8 +69,6 @@ export const TeeTLSExecution = () => {
   });
   const seals = fade(frame, 316);
   const zkOpacity = fade(frame, 346);
-  const captionOpacity = fade(frame, 360);
-
   return (
     <AbsoluteFill style={styles.root}>
       <div style={styles.bgGlow} />
@@ -79,13 +77,10 @@ export const TeeTLSExecution = () => {
       <header style={styles.topbar}>
         <div style={styles.brand}>
           <div style={styles.mark}>
-            <svg viewBox="0 0 24 24" width="30" height="30">
-              <path d="M13 2 4 14h7l-1 8 10-13h-7V2Z" fill="currentColor" />
-            </svg>
+            <Img src={staticFile('logo.png')} style={{width: 30, height: 30, objectFit: 'contain'}} />
           </div>
           <span>TyrPay</span>
         </div>
-        <div style={styles.shotLabel}>Scene 06 / 0G teeTLS</div>
       </header>
 
       <section style={styles.titleBlock}>
@@ -135,13 +130,6 @@ export const TeeTLSExecution = () => {
         <em>stricter cryptographic proof</em>
       </div>
 
-      <footer style={{...styles.caption, opacity: captionOpacity}}>
-        <span style={styles.captionText}>Default Proof Path: 0G teeTLS.</span>
-        <span style={styles.voiceover}>
-          Now the seller executes through TyrPay's default proof path: 0G teeTLS. The call produces a signed receipt
-          bound to the provider, the request hash, and the response hash.
-        </span>
-      </footer>
       <SceneProgress current={5} />
     </AbsoluteFill>
   );
@@ -292,17 +280,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#08111f',
     background: `linear-gradient(135deg, #fbbf24, ${C.amber})`,
     boxShadow: '0 0 34px rgba(245,158,11,0.44)',
-  },
-  shotLabel: {
-    padding: '10px 14px',
-    border: '1px solid rgba(148,163,184,0.18)',
-    borderRadius: 999,
-    background: 'rgba(15,23,42,0.72)',
-    color: '#dbeafe',
-    fontSize: 14,
-    fontWeight: 850,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
   },
   titleBlock: {
     position: 'absolute',

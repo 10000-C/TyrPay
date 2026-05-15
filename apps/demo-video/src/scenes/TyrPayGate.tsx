@@ -74,8 +74,6 @@ export const TyrPayGate = () => {
   const railOpacity = fade(frame, 208, 344);
   const blockFlash = fade(frame, 172, 300);
   const tokenStop = interp(frame, [52, 172], [0, 1]);
-  const captionOpacity = fade(frame, 284, 352);
-
   return (
     <AbsoluteFill style={styles.root}>
       <div style={styles.bgGlow} />
@@ -84,13 +82,10 @@ export const TyrPayGate = () => {
       <header style={styles.topbar}>
         <div style={styles.brand}>
           <div style={styles.mark}>
-            <svg viewBox="0 0 24 24" width="30" height="30">
-              <path d="M13 2 4 14h7l-1 8 10-13h-7V2Z" fill="currentColor" />
-            </svg>
+            <Img src={staticFile('logo.png')} style={{width: 30, height: 30, objectFit: 'contain'}} />
           </div>
           <span>TyrPay</span>
         </div>
-        <div style={styles.shotLabel}>Scene 03 / 16-25s / TyrPay on 0G</div>
       </header>
 
       <section style={styles.titleBlock}>
@@ -101,6 +96,7 @@ export const TyrPayGate = () => {
 
       <div style={styles.buyerWrap}>
         <Img src={staticFile('characters/buyer.svg')} style={styles.buyer} />
+        <div style={styles.buyerLabel}>Buyer</div>
       </div>
 
       <div
@@ -111,12 +107,13 @@ export const TyrPayGate = () => {
         }}
       >
         <Img src={staticFile('characters/evil_seller.svg')} style={styles.evil} />
+        <div style={styles.evilLabel}>Evil Seller</div>
       </div>
 
       <div
         style={{
           ...styles.token,
-          transform: `translate(${interpolate(tokenStop, [0, 1], [0, 162])}px, ${Math.sin(frame / 18) * 3}px)`,
+          transform: `translate(${interpolate(tokenStop, [0, 1], [0, 0])}px, ${Math.sin(frame / 18) * 3}px)`,
         }}
       >
         <span style={styles.tokenCore}>$</span>
@@ -151,13 +148,6 @@ export const TyrPayGate = () => {
 
       <ZeroGChainRail progress={railProgress} opacity={railOpacity} frame={frame} />
 
-      <footer style={{...styles.caption, opacity: captionOpacity}}>
-        <span style={styles.captionText}>Payment waits for proof — enforced on 0G Chain.</span>
-        <span style={styles.voiceover}>
-          TyrPay turns agent payments into verifiable settlement. Funds can move only through commitment, proof, and
-          verification enforced by contracts on 0G Chain.
-        </span>
-      </footer>
       <SceneProgress current={2} />
     </AbsoluteFill>
   );
@@ -387,17 +377,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: `linear-gradient(135deg, #fbbf24, ${C.amber})`,
     boxShadow: '0 0 34px rgba(245,158,11,0.44)',
   },
-  shotLabel: {
-    padding: '10px 14px',
-    border: '1px solid rgba(148,163,184,0.18)',
-    borderRadius: 999,
-    background: 'rgba(15,23,42,0.72)',
-    color: '#dbeafe',
-    fontSize: 14,
-    fontWeight: 850,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-  },
   titleBlock: {
     position: 'absolute',
     left: 68,
@@ -440,6 +419,20 @@ const styles: Record<string, React.CSSProperties> = {
     objectFit: 'contain',
     filter: 'drop-shadow(0 34px 60px rgba(0,0,0,0.46))',
   },
+  buyerLabel: {
+    position: 'absolute',
+    left: 72,
+    top: -10,
+    padding: '8px 12px',
+    border: '1px solid rgba(34,211,238,0.30)',
+    borderRadius: 999,
+    background: 'rgba(8,47,73,0.82)',
+    color: '#cffafe',
+    fontSize: 13,
+    fontWeight: 900,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+  },
   evilWrap: {
     position: 'absolute',
     right: 80,
@@ -454,10 +447,24 @@ const styles: Record<string, React.CSSProperties> = {
     objectFit: 'contain',
     filter: 'drop-shadow(0 0 34px rgba(244,63,94,0.36))',
   },
+  evilLabel: {
+    position: 'absolute',
+    left: 92,
+    top: -10,
+    padding: '8px 12px',
+    border: '1px solid rgba(251,113,133,0.36)',
+    borderRadius: 999,
+    background: 'rgba(76,5,25,0.82)',
+    color: '#fecdd3',
+    fontSize: 13,
+    fontWeight: 900,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+  },
   token: {
     position: 'absolute',
-    left: 496,
-    bottom: 386,
+    left: 620,
+    top: 626,
     zIndex: 9,
     display: 'flex',
     alignItems: 'center',
@@ -587,13 +594,14 @@ const styles: Record<string, React.CSSProperties> = {
   gateFoot: {
     zIndex: 2,
     marginTop: 34,
-    padding: '8px 12px',
+    padding: '12px 18px',
     border: '1px solid rgba(139,92,246,0.34)',
     borderRadius: 16,
     background: 'rgba(17,24,39,0.88)',
-    color: 'rgba(196,181,253,0.74)',
-    fontSize: 12,
-    fontWeight: 850,
+    color: 'rgba(196,181,253,0.84)',
+    fontSize: 16,
+    fontWeight: 900,
+    letterSpacing: '0.06em',
   },
   tyrGuide: {
     position: 'absolute',

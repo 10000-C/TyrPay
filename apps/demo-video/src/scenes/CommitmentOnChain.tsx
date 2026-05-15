@@ -73,8 +73,6 @@ export const CommitmentOnChain = () => {
   });
   const hashOpacity = fade(frame, 168);
   const railOpacity = fade(frame, 152);
-  const captionOpacity = fade(frame, 188);
-
   return (
     <AbsoluteFill style={styles.root}>
       <div style={styles.bgGlow} />
@@ -83,13 +81,10 @@ export const CommitmentOnChain = () => {
       <header style={styles.topbar}>
         <div style={styles.brand}>
           <div style={styles.mark}>
-            <svg viewBox="0 0 24 24" width="30" height="30">
-              <path d="M13 2 4 14h7l-1 8 10-13h-7V2Z" fill="currentColor" />
-            </svg>
+            <Img src={staticFile('logo.png')} style={{width: 30, height: 30, objectFit: 'contain'}} />
           </div>
           <span>TyrPay</span>
         </div>
-        <div style={styles.shotLabel}>Scene 04 / Commitment on 0G</div>
       </header>
 
       <section style={styles.titleBlock}>
@@ -100,7 +95,7 @@ export const CommitmentOnChain = () => {
 
       <div style={styles.buyerWrap}>
         <Img src={staticFile('characters/buyer.svg')} style={styles.buyer} />
-        <div style={styles.buyerLabel}>Buyer watches</div>
+        <div style={styles.buyerLabel}>Buyer</div>
       </div>
 
       <TyrPayGateCore pulse={gatePulse} frame={frame} />
@@ -154,13 +149,6 @@ export const CommitmentOnChain = () => {
 
       <CommitmentRail opacity={railOpacity} progress={interp(frame, [154, 244], [0, 1])} frame={frame} />
 
-      <footer style={{...styles.caption, opacity: captionOpacity}}>
-        <span style={styles.captionText}>A claim becomes an execution commitment.</span>
-        <span style={styles.voiceover}>
-          Before funds move, the seller commits to the model, endpoint, usage, deadline, and proof mode. The commitment
-          hash is recorded by the TyrPay contract on 0G Chain.
-        </span>
-      </footer>
       <SceneProgress current={3} />
     </AbsoluteFill>
   );
@@ -289,17 +277,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#08111f',
     background: `linear-gradient(135deg, #fbbf24, ${C.amber})`,
     boxShadow: '0 0 34px rgba(245,158,11,0.44)',
-  },
-  shotLabel: {
-    padding: '10px 14px',
-    border: '1px solid rgba(148,163,184,0.18)',
-    borderRadius: 999,
-    background: 'rgba(15,23,42,0.72)',
-    color: '#dbeafe',
-    fontSize: 14,
-    fontWeight: 850,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
   },
   titleBlock: {
     position: 'absolute',

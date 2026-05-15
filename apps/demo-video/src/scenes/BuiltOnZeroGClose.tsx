@@ -55,13 +55,10 @@ export const BuiltOnZeroGClose = () => {
       <header style={styles.topbar}>
         <div style={styles.brand}>
           <div style={styles.mark}>
-            <svg viewBox="0 0 24 24" width="30" height="30">
-              <path d="M13 2 4 14h7l-1 8 10-13h-7V2Z" fill="currentColor" />
-            </svg>
+            <Img src={staticFile('logo.png')} style={{width: 30, height: 30, objectFit: 'contain'}} />
           </div>
           <span>TyrPay</span>
         </div>
-        <div style={styles.shotLabel}>Built on 0G</div>
       </header>
 
       <div
@@ -72,9 +69,7 @@ export const BuiltOnZeroGClose = () => {
         }}
       >
         <div style={styles.vaultCore}>
-          <svg viewBox="0 0 24 24" width="58" height="58">
-            <path d="M13 2 4 14h7l-1 8 10-13h-7V2Z" fill="currentColor" />
-          </svg>
+          <Img src={staticFile('logo.png')} style={{width: 58, height: 58, objectFit: 'contain'}} />
         </div>
         <div style={styles.orbitOne} />
         <div style={styles.orbitTwo} />
@@ -102,7 +97,7 @@ export const BuiltOnZeroGClose = () => {
         ))}
       </div>
 
-      <footer style={{...styles.footer, opacity: fade(frame, 104)}}>
+      <footer style={{...styles.footer, opacity: fade(frame, 76)}}>
         <span>Next</span>
         <strong>Proof-based reputation for Agent marketplaces.</strong>
       </footer>
@@ -158,17 +153,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#08111f',
     background: `linear-gradient(135deg, #fbbf24, ${C.amber})`,
     boxShadow: '0 0 34px rgba(245,158,11,0.44)',
-  },
-  shotLabel: {
-    padding: '10px 14px',
-    border: '1px solid rgba(148,163,184,0.18)',
-    borderRadius: 999,
-    background: 'rgba(15,23,42,0.72)',
-    color: '#dbeafe',
-    fontSize: 14,
-    fontWeight: 850,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
   },
   heroMark: {
     position: 'absolute',
@@ -293,8 +277,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   footer: {
     position: 'absolute',
-    left: 92,
-    right: 462,
+    left: '50%',
+    transform: 'translateX(-50%)',
     bottom: 78,
     zIndex: 11,
     display: 'flex',

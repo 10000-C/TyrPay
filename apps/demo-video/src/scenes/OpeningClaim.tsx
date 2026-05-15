@@ -48,11 +48,6 @@ export const OpeningClaim = () => {
   });
   const bubbleScale = interp(frame, [50, 66], [0.92, 1]);
   const scanProgress = interp(frame, [92, 160], [0, 1]);
-  const captionOpacity = interpolate(frame, [22, 42], [0, 1], {
-    easing: ease,
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
   const questionOpacity = interp(frame, [134, 172], [0, 1]);
 
   return (
@@ -63,13 +58,10 @@ export const OpeningClaim = () => {
       <header style={styles.topbar}>
         <div style={styles.brand}>
           <div style={styles.mark}>
-            <svg viewBox="0 0 24 24" width="30" height="30">
-              <path d="M13 2 4 14h7l-1 8 10-13h-7V2Z" fill="currentColor" />
-            </svg>
+            <Img src={staticFile('logo.png')} style={{width: 30, height: 30, objectFit: 'contain'}} />
           </div>
           <span>TyrPay</span>
         </div>
-        <div style={styles.shotLabel}>Scene 01 / 0-8s / Opening Claim</div>
       </header>
 
       <section style={styles.titleBlock}>
@@ -87,6 +79,7 @@ export const OpeningClaim = () => {
       >
         <div style={styles.buyerAura} />
         <Img src={staticFile('characters/buyer.svg')} style={styles.buyer} />
+        <div style={styles.buyerLabel}>Buyer</div>
       </div>
 
       <TaskCard opacity={taskOpacity} frame={frame} />
@@ -117,13 +110,6 @@ export const OpeningClaim = () => {
         <p style={styles.unknownText}>Model call, API path, usage, and response origin are still hidden.</p>
       </div>
 
-      <footer style={{...styles.caption, opacity: captionOpacity}}>
-        <span style={styles.captionText}>A seller says "done." But what was actually done?</span>
-        <span style={styles.voiceover}>
-          Agents will pay other agents for research, data, code, and API-backed work. But when a seller says "done,"
-          the buyer only sees the result, not the execution.
-        </span>
-      </footer>
       <SceneProgress current={0} />
     </AbsoluteFill>
   );
@@ -228,17 +214,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: `linear-gradient(135deg, #fbbf24, ${C.amber})`,
     boxShadow: '0 0 34px rgba(245,158,11,0.44)',
   },
-  shotLabel: {
-    padding: '10px 14px',
-    border: '1px solid rgba(148,163,184,0.18)',
-    borderRadius: 999,
-    background: 'rgba(15,23,42,0.72)',
-    color: '#dbeafe',
-    fontSize: 14,
-    fontWeight: 850,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-  },
   titleBlock: {
     position: 'absolute',
     left: 68,
@@ -292,6 +267,20 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     objectFit: 'contain',
     filter: 'drop-shadow(0 34px 60px rgba(0,0,0,0.46))',
+  },
+  buyerLabel: {
+    position: 'absolute',
+    left: 88,
+    top: -12,
+    padding: '8px 12px',
+    border: '1px solid rgba(34,211,238,0.30)',
+    borderRadius: 999,
+    background: 'rgba(8,47,73,0.82)',
+    color: '#cffafe',
+    fontSize: 13,
+    fontWeight: 900,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
   },
   taskCard: {
     position: 'absolute',

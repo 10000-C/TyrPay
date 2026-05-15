@@ -42,8 +42,7 @@ export const Verdict = () => {
 
   const passProgress = interp(frame, [56, 120], [0, 1]);
   const failProgress = interp(frame, [84, 148], [0, 1]);
-  const captionOpacity = fade(frame, 128);
-
+  const evilLineProgress = interp(frame, [48, 100], [0, 1]);
   return (
     <AbsoluteFill style={styles.root}>
       <div style={styles.bgGlow} />
@@ -52,13 +51,10 @@ export const Verdict = () => {
       <header style={styles.topbar}>
         <div style={styles.brand}>
           <div style={styles.mark}>
-            <svg viewBox="0 0 24 24" width="30" height="30">
-              <path d="M13 2 4 14h7l-1 8 10-13h-7V2Z" fill="currentColor" />
-            </svg>
+            <Img src={staticFile('logo.png')} style={{width: 30, height: 30, objectFit: 'contain'}} />
           </div>
           <span>TyrPay</span>
         </div>
-        <div style={styles.shotLabel}>Scene 09 / Verdict</div>
       </header>
 
       <section style={styles.titleBlock}>
@@ -73,13 +69,14 @@ export const Verdict = () => {
         <b>locked funds</b>
       </div>
 
-      <Actor side="left" label="Buyer Refund" src="characters/buyer.svg" />
-      <Actor side="right" label="Honest Seller Wallet" src="characters/honest_seller.svg" />
+      <Actor side="left" label="Buyer" src="characters/buyer.svg" />
+      <Actor side="right" label="Honest Seller" src="characters/honest_seller.svg" />
       <EvilRejected />
       <VerdictPaths pass={passProgress} fail={failProgress} />
+      <EvilDashedLine frame={frame} progress={evilLineProgress} />
 
-      <Token x={interp(passProgress, [0, 1], [960, 1506])} y={interp(passProgress, [0, 1], [456, 410])} opacity={passProgress} color={C.emerald} />
-      <Token x={interp(failProgress, [0, 1], [960, 398])} y={interp(failProgress, [0, 1], [620, 660])} opacity={failProgress} color={C.blue} />
+      <Token x={interp(passProgress, [0, 1], [960, 1340])} y={interp(passProgress, [0, 1], [494, 446])} opacity={passProgress} color={C.emerald} />
+      <Token x={interp(failProgress, [0, 1], [960, 580])} y={interp(failProgress, [0, 1], [494, 544])} opacity={failProgress} color={C.blue} />
 
       <div style={{...styles.passCard, opacity: fade(frame, 82)}}>
         <span>PASS</span>
@@ -91,12 +88,6 @@ export const Verdict = () => {
         <strong>Funds refunded to Buyer</strong>
       </div>
 
-      <footer style={{...styles.caption, opacity: captionOpacity}}>
-        <span style={styles.captionText}>PASS settles. FAIL refunds.</span>
-        <span style={styles.voiceover}>
-          If the proof passes, escrow is released to the seller. If proof fails or times out, the buyer is refunded.
-        </span>
-      </footer>
       <SceneProgress current={8} />
     </AbsoluteFill>
   );
@@ -112,9 +103,40 @@ const Actor = ({side, label, src}: {side: 'left' | 'right'; label: string; src: 
 const EvilRejected = () => (
   <div style={styles.evil}>
     <Img src={staticFile('characters/evil_seller.svg')} style={styles.evilImg} />
-    <div style={styles.evilBadge}>INVALID PROOF</div>
+    <div style={styles.evilBadge}>Evil Seller</div>
   </div>
 );
+
+const EvilDashedLine = ({frame, progress}: {frame: number; progress: number}) => {
+  const crossOpacity = fade(frame, 72);
+  const endX = 960 + progress * 540;
+  const endY = 490 + progress * 220;
+
+  return (
+    <>
+      <svg style={styles.pathSvg} viewBox="0 0 1920 1080">
+        <line
+          x1="960"
+          y1="510"
+          x2={endX}
+          y2={endY}
+          stroke="#fb7185"
+          strokeWidth="5"
+          strokeDasharray="18 14"
+          strokeLinecap="round"
+          opacity={0.72 * progress}
+        />
+      </svg>
+      <div style={{...styles.evilCross, opacity: crossOpacity}}>
+        <svg width="60" height="60" viewBox="0 0 60 60">
+          <line x1="8" y1="8" x2="52" y2="52" stroke="#fb7185" strokeWidth="6" strokeLinecap="round" />
+          <line x1="52" y1="8" x2="8" y2="52" stroke="#fb7185" strokeWidth="6" strokeLinecap="round" />
+        </svg>
+        <span style={styles.evilCrossLabel}>NO PAYMENT</span>
+      </div>
+    </>
+  );
+};
 
 const VerdictPaths = ({pass, fail}: {pass: number; fail: number}) => (
   <svg style={styles.pathSvg} viewBox="0 0 1920 1080">
@@ -127,7 +149,7 @@ const VerdictPaths = ({pass, fail}: {pass: number; fail: number}) => (
       </marker>
     </defs>
     <path
-      d="M960 456 C1110 394 1320 384 1506 410"
+      d="M960 494 C1060 434 1220 420 1340 446"
       fill="none"
       stroke={C.emerald}
       strokeDasharray="760"
@@ -139,7 +161,7 @@ const VerdictPaths = ({pass, fail}: {pass: number; fail: number}) => (
       style={{filter: 'drop-shadow(0 0 16px rgba(16,185,129,0.52))'}}
     />
     <path
-      d="M960 620 C802 692 600 710 398 660"
+      d="M960 494 C810 558 600 568 360 544"
       fill="none"
       stroke={C.blue}
       strokeDasharray="760"
@@ -216,17 +238,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: `linear-gradient(135deg, #fbbf24, ${C.amber})`,
     boxShadow: '0 0 34px rgba(245,158,11,0.44)',
   },
-  shotLabel: {
-    padding: '10px 14px',
-    border: '1px solid rgba(148,163,184,0.18)',
-    borderRadius: 999,
-    background: 'rgba(15,23,42,0.72)',
-    color: '#dbeafe',
-    fontSize: 14,
-    fontWeight: 850,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-  },
   titleBlock: {position: 'absolute', left: 68, top: 148, width: 660, zIndex: 7},
   eyebrow: {
     marginBottom: 18,
@@ -256,8 +267,8 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
   },
   actor: {position: 'absolute', zIndex: 8, width: 310, height: 310},
-  actorLeft: {left: 194, top: 538},
-  actorRight: {right: 164, top: 270},
+  actorLeft: {left: 114, top: 580},
+  actorRight: {right: 164, top: 310},
   actorImg: {width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 30px 58px rgba(0,0,0,0.46))'},
   actorLabel: {
     position: 'absolute',
@@ -273,7 +284,7 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: '0.08em',
     textTransform: 'uppercase',
   },
-  evil: {position: 'absolute', right: 174, top: 600, zIndex: 7, width: 230, height: 230, opacity: 0.62, filter: 'grayscale(0.25)'},
+  evil: {position: 'absolute', right: 174, top: 600, zIndex: 7, width: 230, height: 230, opacity: 0.72, filter: 'grayscale(0.15)'},
   evilImg: {width: '100%', height: '100%', objectFit: 'contain'},
   evilBadge: {
     position: 'absolute',
@@ -287,6 +298,23 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     fontWeight: 900,
     letterSpacing: '0.08em',
+  },
+  evilCross: {
+    position: 'absolute',
+    right: 340,
+    top: 660,
+    zIndex: 12,
+    display: 'grid',
+    placeItems: 'center',
+    gap: 4,
+  },
+  evilCrossLabel: {
+    color: '#fecdd3',
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: '0.10em',
+    textTransform: 'uppercase',
+    whiteSpace: 'nowrap',
   },
   pathSvg: {position: 'absolute', inset: 0, zIndex: 11, pointerEvents: 'none'},
   token: {
@@ -304,8 +332,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   passCard: {
     position: 'absolute',
-    right: 444,
-    top: 292,
+    right: 240,
+    top: 370,
     zIndex: 15,
     width: 330,
     display: 'grid',
@@ -318,8 +346,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   failCard: {
     position: 'absolute',
-    left: 438,
-    top: 656,
+    left: 100,
+    top: 510,
     zIndex: 15,
     width: 330,
     display: 'grid',

@@ -65,10 +65,8 @@ export const Verification = () => {
   });
   const guideIn = interp(frame, [90, 128], [60, 0]);
   const scanProgress = interp(frame, [132, 292], [0, 1]);
-  const boundaryOpacity = fade(frame, 292);
+  const boundaryOpacity = fade(frame, 180);
   const chainOpacity = fade(frame, 306);
-  const captionOpacity = fade(frame, 326);
-
   return (
     <AbsoluteFill style={styles.root}>
       <div style={styles.bgGlow} />
@@ -77,13 +75,10 @@ export const Verification = () => {
       <header style={styles.topbar}>
         <div style={styles.brand}>
           <div style={styles.mark}>
-            <svg viewBox="0 0 24 24" width="30" height="30">
-              <path d="M13 2 4 14h7l-1 8 10-13h-7V2Z" fill="currentColor" />
-            </svg>
+            <Img src={staticFile('logo.png')} style={{width: 30, height: 30, objectFit: 'contain'}} />
           </div>
           <span>TyrPay</span>
         </div>
-        <div style={styles.shotLabel}>Scene 08 / Verification</div>
       </header>
 
       <section style={styles.titleBlock}>
@@ -151,13 +146,6 @@ export const Verification = () => {
 
       <ChainRail opacity={chainOpacity} />
 
-      <footer style={{...styles.caption, opacity: captionOpacity}}>
-        <span style={styles.captionText}>Verification decides settlement.</span>
-        <span style={styles.voiceover}>
-          The verifier checks proof validity, provider match, task binding, usage, deadline, replay protection, and
-          proof availability on 0G Storage.
-        </span>
-      </footer>
       <SceneProgress current={7} />
     </AbsoluteFill>
   );
@@ -293,17 +281,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#08111f',
     background: `linear-gradient(135deg, #fbbf24, ${C.amber})`,
     boxShadow: '0 0 34px rgba(245,158,11,0.44)',
-  },
-  shotLabel: {
-    padding: '10px 14px',
-    border: '1px solid rgba(148,163,184,0.18)',
-    borderRadius: 999,
-    background: 'rgba(15,23,42,0.72)',
-    color: '#dbeafe',
-    fontSize: 14,
-    fontWeight: 850,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
   },
   titleBlock: {
     position: 'absolute',

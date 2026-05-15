@@ -68,13 +68,10 @@ export const RiskReveal = () => {
       <header style={styles.topbar}>
         <div style={styles.brand}>
           <div style={styles.mark}>
-            <svg viewBox="0 0 24 24" width="30" height="30">
-              <path d="M13 2 4 14h7l-1 8 10-13h-7V2Z" fill="currentColor" />
-            </svg>
+            <Img src={staticFile('logo.png')} style={{width: 30, height: 30, objectFit: 'contain'}} />
           </div>
           <span>TyrPay</span>
         </div>
-        <div style={styles.shotLabel}>Scene 02 / 8-17s / Risk Reveal</div>
       </header>
 
       <section style={styles.titleBlock}>
@@ -85,6 +82,7 @@ export const RiskReveal = () => {
 
       <div style={{...styles.buyerWrap, opacity: buyerOpacity}}>
         <Img src={staticFile('characters/buyer.svg')} style={styles.buyer} />
+        <div style={styles.buyerLabel}>Buyer</div>
       </div>
 
       <div
@@ -112,7 +110,7 @@ export const RiskReveal = () => {
           transform: `translateX(${interp(frame, [34, 82], [40, 0])}px) scale(0.78)`,
         }}
       >
-        <div style={styles.honestLabel}>Honest possibility</div>
+        <div style={styles.honestLabel}>Honest Seller</div>
         <Img src={staticFile('characters/honest_seller.svg')} style={styles.sellerSvg} />
       </div>
 
@@ -126,7 +124,7 @@ export const RiskReveal = () => {
           filter: `drop-shadow(${Math.sin(frame / 3) * 4}px 0 24px rgba(244,63,94,0.38))`,
         }}
       >
-        <div style={styles.evilLabel}>Shortcut seller</div>
+        <div style={styles.evilLabel}>Evil Seller</div>
         <Img src={staticFile('characters/evil_seller.svg')} style={styles.sellerSvg} />
       </div>
 
@@ -155,12 +153,6 @@ export const RiskReveal = () => {
         <p style={styles.warningText}>The output exists, but the model/API path is still unproven.</p>
       </div>
 
-      <footer style={styles.caption}>
-        <span style={styles.captionText}>Was the promised model really called — or just claimed?</span>
-        <span style={styles.voiceover}>
-          Did it call the promised model? Did it use the right API? Or did it replace the work with a cheaper shortcut?
-        </span>
-      </footer>
       <SceneProgress current={1} />
     </AbsoluteFill>
   );
@@ -273,17 +265,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: `linear-gradient(135deg, #fbbf24, ${C.amber})`,
     boxShadow: '0 0 34px rgba(245,158,11,0.44)',
   },
-  shotLabel: {
-    padding: '10px 14px',
-    border: '1px solid rgba(148,163,184,0.18)',
-    borderRadius: 999,
-    background: 'rgba(15,23,42,0.72)',
-    color: '#dbeafe',
-    fontSize: 14,
-    fontWeight: 850,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-  },
   titleBlock: {
     position: 'absolute',
     left: 68,
@@ -325,6 +306,20 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     objectFit: 'contain',
     filter: 'drop-shadow(0 34px 60px rgba(0,0,0,0.46))',
+  },
+  buyerLabel: {
+    position: 'absolute',
+    left: 88,
+    bottom: -8,
+    padding: '8px 12px',
+    border: '1px solid rgba(34,211,238,0.30)',
+    borderRadius: 999,
+    background: 'rgba(8,47,73,0.82)',
+    color: '#cffafe',
+    fontSize: 13,
+    fontWeight: 900,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
   },
   token: {
     position: 'absolute',

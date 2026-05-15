@@ -1,0 +1,258 @@
+{
+  "scene-01": {
+    "chunks": [
+      "Agents will pay other agents for research, data, code, and API-backed work.",
+      "But when a seller says 'done,' the buyer only sees the result \u2014 not the execution."
+    ],
+    "startFrames": [
+      0,
+      153
+    ],
+    "sentences": [
+      {
+        "offset_s": 0.1,
+        "duration_s": 5.0333335,
+        "text": "Agents will pay other agents for research, data, code, and API-backed work."
+      },
+      {
+        "offset_s": 5.0833335,
+        "duration_s": 4.9642859,
+        "text": "But when a seller says 'done,' the buyer only sees the result \u2014 not the execution."
+      }
+    ]
+  },
+  "scene-02": {
+    "chunks": [
+      "Did it call the promised model?",
+      "Did it use the right API?",
+      "Or did it replace the work with a cheaper shortcut?"
+    ],
+    "startFrames": [
+      0,
+      73,
+      143
+    ],
+    "sentences": [
+      {
+        "offset_s": 0.1,
+        "duration_s": 2.3785715,
+        "text": "Did it call the promised model?"
+      },
+      {
+        "offset_s": 2.4285715,
+        "duration_s": 2.3333334,
+        "text": "Did it use the right API?"
+      },
+      {
+        "offset_s": 4.7619049,
+        "duration_s": 3.2619049,
+        "text": "Or did it replace the work with a cheaper shortcut?"
+      }
+    ]
+  },
+  "scene-03": {
+    "chunks": [
+      "TyrPay turns agent payments into verifiable settlement.",
+      "Funds can move only through commitment, proof,",
+      "and verification enforced by contracts on 0G Chain."
+    ],
+    "startFrames": [
+      0,
+      118,
+      202
+    ],
+    "sentences": [
+      {
+        "offset_s": 0.1,
+        "duration_s": 3.8666668,
+        "text": "TyrPay turns agent payments into verifiable settlement."
+      },
+      {
+        "offset_s": 3.9166668,
+        "duration_s": 6.0238097,
+        "text": "Funds can move only through commitment, proof, and verification enforced by contracts on 0G Chain."
+      }
+    ]
+  },
+  "scene-04": {
+    "chunks": [
+      "Before funds move, the seller commits to the model, endpoint,",
+      "usage, deadline, and proof mode.",
+      "The commitment hash is recorded by the TyrPay contract on 0G Chain."
+    ],
+    "startFrames": [
+      0,
+      120,
+      178
+    ],
+    "sentences": [
+      {
+        "offset_s": 0.1,
+        "duration_s": 5.8666669,
+        "text": "Before funds move, the seller commits to the model, endpoint, usage, deadline, and proof mode."
+      },
+      {
+        "offset_s": 5.9166669,
+        "duration_s": 4.5119049,
+        "text": "The commitment hash is recorded by the TyrPay contract on 0G Chain."
+      }
+    ]
+  },
+  "scene-05": {
+    "chunks": [
+      "The buyer accepts the commitment and locks funds",
+      "into the TyrPay contract on 0G Chain.",
+      "The seller has not been paid yet."
+    ],
+    "startFrames": [
+      0,
+      92,
+      158
+    ],
+    "sentences": [
+      {
+        "offset_s": 0.1,
+        "duration_s": 5.2238097,
+        "text": "The buyer accepts the commitment and locks funds into the TyrPay contract on 0G Chain."
+      },
+      {
+        "offset_s": 5.2738097,
+        "duration_s": 2.5595239,
+        "text": "The seller has not been paid yet."
+      }
+    ]
+  },
+  "scene-06": {
+    "chunks": [
+      "Now the seller executes through TyrPay's default proof path: 0G teeTLS.",
+      "The call produces a signed receipt bound to the provider,",
+      "the request hash, and the response hash.",
+      "For higher-assurance cases, TyrPay also provides zkTLS mode",
+      "for stricter cryptographic proof of the API interaction."
+    ],
+    "startFrames": [
+      0,
+      165,
+      265,
+      333,
+      444
+    ],
+    "sentences": [
+      {
+        "offset_s": 0.1,
+        "duration_s": 5.461905,
+        "text": "Now the seller executes through TyrPay's default proof path: 0G teeTLS."
+      },
+      {
+        "offset_s": 5.511905,
+        "duration_s": 5.5952383,
+        "text": "The call produces a signed receipt bound to the provider, the request hash, and the response hash."
+      },
+      {
+        "offset_s": 11.1071433,
+        "duration_s": 7.2857146,
+        "text": "For higher-assurance cases, TyrPay also provides zkTLS mode for stricter cryptographic proof of the API interaction."
+      }
+    ]
+  },
+  "scene-07": {
+    "chunks": [
+      "The full proof bundle is stored on 0G Storage.",
+      "The 0G Chain contract only keeps the proof hash, storage reference,",
+      "commitment state, and escrow state."
+    ],
+    "startFrames": [
+      0,
+      105,
+      232
+    ],
+    "sentences": [
+      {
+        "offset_s": 0.1,
+        "duration_s": 3.4619049,
+        "text": "The full proof bundle is stored on 0G Storage."
+      },
+      {
+        "offset_s": 3.5119049,
+        "duration_s": 6.3809526,
+        "text": "The 0G Chain contract only keeps the proof hash, storage reference, commitment state, and escrow state."
+      }
+    ]
+  },
+  "scene-08": {
+    "chunks": [
+      "The verifier checks whether the payment conditions were met:",
+      "proof validity, provider match, task binding, commitment match,",
+      "usage, deadline, replay protection, and proof availability on 0G Storage.",
+      "TyrPay does not judge answer quality.",
+      "It verifies committed execution."
+    ],
+    "startFrames": [
+      0,
+      113,
+      222,
+      349,
+      435
+    ],
+    "sentences": [
+      {
+        "offset_s": 0.1,
+        "duration_s": 11.5809529,
+        "text": "The verifier checks whether the payment conditions were met: proof validity, provider match, task binding, commitment match, usage, deadline, replay protection, and proof availability on 0G Storage."
+      },
+      {
+        "offset_s": 11.6309529,
+        "duration_s": 2.8690477,
+        "text": "TyrPay does not judge answer quality."
+      },
+      {
+        "offset_s": 14.5000006,
+        "duration_s": 2.7857144,
+        "text": "It verifies committed execution."
+      }
+    ]
+  },
+  "scene-09": {
+    "chunks": [
+      "If the proof passes, the TyrPay contract on 0G Chain",
+      "releases escrow to the seller.",
+      "If proof fails or times out, the buyer is refunded."
+    ],
+    "startFrames": [
+      0,
+      106,
+      163
+    ],
+    "sentences": [
+      {
+        "offset_s": 0.1,
+        "duration_s": 5.3904764,
+        "text": "If the proof passes, the TyrPay contract on 0G Chain releases escrow to the seller."
+      },
+      {
+        "offset_s": 5.4404764,
+        "duration_s": 3.6785715,
+        "text": "If proof fails or times out, the buyer is refunded."
+      }
+    ]
+  },
+  "scene-10": {
+    "chunks": [
+      "TyrPay is verifiable Agent settlement on 0G:",
+      "settlement contracts on 0G Chain, proof archives on 0G Storage,",
+      "0G teeTLS as the native proof path, and zkTLS for higher-assurance cases."
+    ],
+    "startFrames": [
+      0,
+      92,
+      218
+    ],
+    "sentences": [
+      {
+        "offset_s": 0.1,
+        "duration_s": 11.9619053,
+        "text": "TyrPay is verifiable Agent settlement on 0G: settlement contracts on 0G Chain, proof archives on 0G Storage, 0G teeTLS as the native proof path, and zkTLS for higher-assurance cases."
+      }
+    ]
+  }
+}

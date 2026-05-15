@@ -3,7 +3,12 @@
     "allow": [
       "PowerShell(corepack pnpm --filter @tyrpay/seller-sdk build 2>&1)",
       "PowerShell(corepack pnpm --filter @tyrpay/seller-skill typecheck 2>&1)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(edge-tts --voice=en-US-GuyNeural --rate=+5% --text=\"Agents will pay other agents for research, data, code, and API-backed work. But when a seller says done, the buyer only sees the result, not the execution.\" --write-media=\"public/voiceover/scene-01.mp3\")",
+      "Bash(edge-tts --voice=en-US-GuyNeural --rate=+5% --text=\"Did it call the promised model? Did it use the right API? Or did it replace the work with a cheaper shortcut?\" --write-media=\"public/voiceover/scene-02.mp3\")",
+      "Bash(edge-tts --voice=en-US-GuyNeural --rate=+5% --text=\"TyrPay turns agent payments into verifiable settlement. Funds can move only through commitment, proof, and verification enforced by contracts on 0G Chain.\" --write-media=\"public/voiceover/scene-03.mp3\")",
+      "Bash(edge-tts --voice=en-US-GuyNeural --rate=+5% --text=\"Before funds move, the seller commits to the model, endpoint, usage, deadline, and proof mode. The commitment hash is recorded by the TyrPay contract on 0G Chain.\" --write-media=\"public/voiceover/scene-04.mp3\")",
+      "Bash(edge-tts --voice=en-US-GuyNeural --rate=+5% --text=\"The buyer accepts the commitment and locks funds into the TyrPay contract on 0G Chain. The seller has not been paid yet.\" --write-media=\"public/voiceover/scene-05.mp3\")"
     ]
   }
 }
