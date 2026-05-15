@@ -7,7 +7,7 @@ contract into structured tool definitions that an agent can execute directly.
 
 ## What This Package Exports
 
-- `createSellerTools(config)`: returns five seller-side tools
+- `createSellerTools(config)`: returns six seller-side tools
 - `SellerSkillToolError`: structured error class with `code`, `field`, `suggestion`, `retryable`
 - `SellerTool`: the shared tool shape used by this package
 - `ReadableContractLike`: the read/write contract interface expected by the tools
@@ -16,6 +16,7 @@ contract into structured tool definitions that an agent can execute directly.
 Tool names:
 
 - `tyrpay_ready`
+- `tyrpay_discover_model_endpoint`
 - `tyrpay_accept_task`
 - `tyrpay_execute_task`
 - `tyrpay_submit_proof`
@@ -35,14 +36,20 @@ Typical seller-side flow:
 
 1. Call `tyrpay_ready` to verify signer access and storage adapter connectivity.
 2. Receive a `taskId` from the buyer through your own application or messaging layer.
-3. Call `tyrpay_accept_task` to build and submit the execution commitment.
-4. Wait for the buyer to validate that commitment and fund the task.
+3. For 0G TeeTLS/TeeML execution, call `tyrpay_discover_model_endpoint` with the target model and use the recommended endpoint in the commitment.
+4. Call `tyrpay_accept_task` to build and submit the execution commitment.
+5. Wait for the buyer to validate that commitment and fund the task.
    Poll with `tyrpay_check_settlement` until status is `READY_TO_EXECUTE`.
-5. Read the funded task from the settlement contract and obtain its `taskNonce`.
-6. Call `tyrpay_execute_task` once per proved upstream API call.
-7. Keep each returned receipt.
-8. Call `tyrpay_submit_proof` with the commitment and collected receipts.
-9. Use `tyrpay_check_settlement` to monitor whether the verifier settled or refunded the task.
+6. Read the funded task from the settlement contract and obtain its `taskNonce`.
+7. Call `tyrpay_execute_task` once per proved upstream API call.
+8. Keep each returned receipt.
+9. Call `tyrpay_submit_proof` with the commitment and collected receipts.
+10. Use `tyrpay_check_settlement` to monitor whether the verifier settled or refunded the task.
+
+When using 0G TeeTLS, the commitment target and model must describe the actual
+0G TeeTLS request the adapter will make. Do not commit to a generic upstream
+OpenAI endpoint or a preferred model name unless that is the endpoint/model
+resolved from 0G TeeTLS service metadata.
 
 `seller-skill` does not discover tasks, coordinate with the buyer, or operate a
 verifier. Those responsibilities stay outside this package.
@@ -70,8 +77,8 @@ return the current `Task` struct in this exact order:
 
 ```text
 taskId, taskNonce, buyer, seller, token, amount, deadlineMs,
-commitmentHash, commitmentURI, fundedAtMs,
-proofBundleHash, proofBundleURI, proofSubmittedAtMs,
+requiredMinUsage, requiredModelsHash, commitmentHash, commitmentURI,
+fundedAtMs, proofBundleHash, proofBundleURI, proofSubmittedAtMs,
 reportHash, settledAtMs, refundedAtMs, status
 ```
 
@@ -79,9 +86,9 @@ Use this ABI fragment when constructing an ethers contract for seller-skill:
 
 ```ts
 const TyrPaySettlementAbi = [
-  "function submitCommitment(bytes32 taskId,bytes32 commitmentHash,string commitmentURI)",
+  "function submitCommitment(bytes32 taskId,bytes32 commitmentHash,string commitmentURI,uint256 commitmentMinUsage,string[] commitmentModels)",
   "function submitProofBundle(bytes32 taskId,bytes32 proofBundleHash,string proofBundleURI)",
-  "function getTask(bytes32 taskId) view returns ((bytes32 taskId, bytes32 taskNonce, address buyer, address seller, address token, uint256 amount, uint256 deadlineMs, bytes32 commitmentHash, string commitmentURI, uint256 fundedAtMs, bytes32 proofBundleHash, string proofBundleURI, uint256 proofSubmittedAtMs, bytes32 reportHash, uint256 settledAtMs, uint256 refundedAtMs, uint8 status))"
+  "function getTask(bytes32 taskId) view returns ((bytes32 taskId, bytes32 taskNonce, address buyer, address seller, address token, uint256 amount, uint256 deadlineMs, uint256 requiredMinUsage, bytes32 requiredModelsHash, bytes32 commitmentHash, string commitmentURI, uint256 fundedAtMs, bytes32 proofBundleHash, string proofBundleURI, uint256 proofSubmittedAtMs, bytes32 reportHash, uint256 settledAtMs, uint256 refundedAtMs, uint8 status))"
 ];
 ```
 
@@ -261,6 +268,13 @@ const accepted = await acceptTask.execute({
 });
 ```
 
+For provider `"0g-teetls"`, call `tyrpay_discover_model_endpoint` first when
+you only know the desired model. Use the recommended endpoint's `host`, `path`,
+`method`, and `model` in `tyrpay_accept_task`, then pass its `providerOptions`
+to `tyrpay_execute_task`. `host` and `path` must be the actual 0G endpoint,
+`method` must be `POST`, and `allowedModels` must include the 0G service
+metadata model that execution will declare.
+
 ## Error Handling
 
 All tools wrap errors in `SellerSkillToolError`, which provides structured fields:
@@ -302,6 +316,21 @@ Returns:
 - `signerAddress`: the seller's wallet address
 - `userStatus`: `READY`
 - `userMessage`: confirmation that signer is reachable
+
+### `tyrpay_discover_model_endpoint`
+
+Discovers reachable TeeTLS/TeeML endpoints for a requested model.
+
+Use this before `tyrpay_accept_task` when the seller intends to execute through
+provider `"0g-teetls"` but only has a model name.
+
+Returns:
+
+- `endpoints`: all matching discovered endpoints up to `limit`
+- `recommended`: the first endpoint to use, or `null` when none are found
+- `host`, `path`, `method`, `model`: values to pass into `tyrpay_accept_task`
+- `providerOptions`: values to pass into `tyrpay_execute_task`
+- `userStatus`: `ENDPOINT_READY` or `NO_ENDPOINT_FOUND`
 
 ### `tyrpay_accept_task`
 
@@ -387,6 +416,9 @@ Returns:
 - `declaredModel` must be included in `commitment.allowedModels`.
 - `request.host`, `request.path`, and `request.method` must match the commitment
   target exactly.
+- For 0G TeeTLS, the commitment target/model must be the actual endpoint/model
+  resolved by the 0G TeeTLS adapter. Committing to a different upstream endpoint
+  or model will fail execution or verification.
 - All tool inputs are validated at runtime before any SDK or on-chain calls.
 
 ## Troubleshooting Seller Skill Runs

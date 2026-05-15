@@ -106,6 +106,30 @@ export interface ZeroGTeeTlsPreparedRequest {
   request: ZkTlsRequestEvidence;
 }
 
+export interface ZeroGTeeTlsDiscoverModelEndpointsInput {
+  model: string;
+  requestPath?: string;
+  limit?: number;
+  requireReachableEndpoint?: boolean;
+}
+
+export interface ZeroGTeeTlsDiscoveredModelEndpoint {
+  provider: typeof ZERO_G_TEETLS_PROVIDER;
+  providerAddress: Address;
+  endpoint: string;
+  host: string;
+  path: string;
+  method: "POST";
+  model: string;
+  requestPath: string;
+  serviceType: string | null;
+  verifiability: string | null;
+  reachable: boolean;
+  providerOptions: {
+    providerAddress: Address;
+  };
+}
+
 interface ZeroGServiceDescriptor {
   providerAddress: Address;
   serviceType: string | null;
@@ -166,6 +190,78 @@ export class ZeroGTeeTlsAdapter
   readonly name = ZERO_G_TEETLS_PROVIDER;
 
   constructor(private readonly config: ZeroGTeeTlsAdapterConfig = {}) {}
+
+  async discoverModelEndpoints(
+    input: ZeroGTeeTlsDiscoverModelEndpointsInput
+  ): Promise<ZeroGTeeTlsDiscoveredModelEndpoint[]> {
+    assertString(input.model, "model");
+
+    const broker = await this.createBroker();
+    const requestPath = input.requestPath ?? this.config.defaultRequestPath ?? DEFAULT_ZERO_G_TEETLS_REQUEST_PATH;
+    const limit = input.limit ?? 10;
+    const requireReachableEndpoint =
+      input.requireReachableEndpoint ?? this.config.providerSelection?.requireReachableEndpoint ?? true;
+
+    if (!Number.isSafeInteger(limit) || limit <= 0) {
+      throw new TypeError("limit must be a positive integer.");
+    }
+
+    if (typeof broker.inference.listService !== "function") {
+      throw new TypeError("0G model endpoint discovery requires broker.inference.listService.");
+    }
+
+    const services = (await broker.inference.listService())
+      .map(normalizeServiceDescriptor)
+      .filter((service): service is ZeroGServiceDescriptor => service !== null)
+      .filter((service) => service.model === null || service.model === input.model)
+      .filter((service) => this.matchesProviderSelection({ ...service, model: input.model }));
+
+    const results: ZeroGTeeTlsDiscoveredModelEndpoint[] = [];
+    const seen = new Set<string>();
+
+    for (const service of services) {
+      if (results.length >= limit) {
+        break;
+      }
+
+      const resolved = await this.resolveProviderEndpoint(broker, service.providerAddress, requestPath);
+
+      if (resolved.serviceMetadata.model !== input.model) {
+        continue;
+      }
+
+      const reachable = await this.shouldAcceptEndpoint(resolved.endpoint);
+      if (requireReachableEndpoint && !reachable) {
+        continue;
+      }
+
+      const endpointUrl = new URL(resolved.endpoint);
+      const key = `${resolved.providerAddress}:${resolved.endpoint}:${resolved.serviceMetadata.model}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+
+      results.push({
+        provider: ZERO_G_TEETLS_PROVIDER,
+        providerAddress: resolved.providerAddress,
+        endpoint: resolved.endpoint,
+        host: endpointUrl.host,
+        path: endpointUrl.pathname,
+        method: "POST",
+        model: resolved.serviceMetadata.model,
+        requestPath,
+        serviceType: service.serviceType,
+        verifiability: service.verifiability,
+        reachable,
+        providerOptions: {
+          providerAddress: resolved.providerAddress
+        }
+      });
+    }
+
+    return results;
+  }
 
   async prepareOpenAiRequest(input: ZeroGTeeTlsPrepareRequestInput): Promise<ZeroGTeeTlsPreparedRequest> {
     const broker = await this.createBroker();

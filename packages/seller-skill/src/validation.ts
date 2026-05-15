@@ -4,6 +4,7 @@ import type {
   AcceptTaskInput,
   CheckSettlementInput,
   ExecuteTaskInput,
+  ModelEndpointDiscoveryInput,
   SubmitProofInput
 } from "./types.js";
 
@@ -33,6 +34,14 @@ const REQUEST_KEYS = new Set(["host", "path", "method", "headers", "body"]);
 const SUBMIT_PROOF_KEYS = new Set(["taskId", "commitment", "receipts"]);
 
 const CHECK_SETTLEMENT_KEYS = new Set(["taskId"]);
+
+const DISCOVER_MODEL_ENDPOINT_KEYS = new Set([
+  "model",
+  "provider",
+  "requestPath",
+  "limit",
+  "requireReachableEndpoint"
+]);
 
 export function validateAcceptTaskInput(input: unknown): AcceptTaskInput {
   const object = expectObject(input, "input");
@@ -91,6 +100,21 @@ export function validateCheckSettlementInput(input: unknown): CheckSettlementInp
 
   return {
     taskId: normalizeBytes32Field(expectString(object.taskId, "taskId"), "taskId")
+  };
+}
+
+export function validateModelEndpointDiscoveryInput(input: unknown): ModelEndpointDiscoveryInput {
+  const object = expectObject(input, "input");
+  assertNoAdditionalProperties(object, DISCOVER_MODEL_ENDPOINT_KEYS, "input");
+
+  return {
+    model: expectString(object.model, "model"),
+    ...(object.provider !== undefined ? { provider: expectString(object.provider, "provider") } : {}),
+    ...(object.requestPath !== undefined ? { requestPath: expectString(object.requestPath, "requestPath") } : {}),
+    ...(object.limit !== undefined ? { limit: expectPositiveInteger(object.limit, "limit") } : {}),
+    ...(object.requireReachableEndpoint !== undefined
+      ? { requireReachableEndpoint: expectBoolean(object.requireReachableEndpoint, "requireReachableEndpoint") }
+      : {})
   };
 }
 
@@ -177,9 +201,25 @@ function expectPositiveNumber(input: unknown, fieldName: string): number {
   return input;
 }
 
+function expectPositiveInteger(input: unknown, fieldName: string): number {
+  if (typeof input !== "number" || !Number.isSafeInteger(input) || input <= 0) {
+    throw validationError("Expected a positive integer.", fieldName, input);
+  }
+
+  return input;
+}
+
 function expectNonNegativeInteger(input: unknown, fieldName: string): number {
   if (typeof input !== "number" || !Number.isSafeInteger(input) || input < 0) {
     throw validationError("Expected a non-negative integer.", fieldName, input);
+  }
+
+  return input;
+}
+
+function expectBoolean(input: unknown, fieldName: string): boolean {
+  if (typeof input !== "boolean") {
+    throw validationError("Expected a boolean.", fieldName, input);
   }
 
   return input;

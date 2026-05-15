@@ -18,6 +18,8 @@ export interface RawOnChainTask {
   token: string;
   amount: bigint;
   deadlineMs: bigint;
+  requiredMinUsage: bigint;
+  requiredModelsHash: string;
   commitmentHash: string;
   commitmentURI: string;
   fundedAtMs: bigint;
@@ -45,6 +47,38 @@ export interface SellerSkillConfig {
    * not a settlement contract, verifier registry, service URL, or verifier contract address.
    */
   verifier?: string;
+}
+
+export interface ModelEndpointDiscoveryInput {
+  model: string;
+  provider?: string;
+  requestPath?: string;
+  limit?: number;
+  requireReachableEndpoint?: boolean;
+}
+
+export interface DiscoveredModelEndpoint {
+  provider: string;
+  providerAddress?: string;
+  endpoint: string;
+  host: string;
+  path: string;
+  method: string;
+  model: string;
+  requestPath?: string;
+  serviceType?: string | null;
+  verifiability?: string | null;
+  reachable?: boolean;
+  providerOptions?: Record<string, unknown>;
+}
+
+export interface ModelEndpointDiscoveryResult {
+  model: string;
+  provider: string;
+  endpoints: DiscoveredModelEndpoint[];
+  recommended: DiscoveredModelEndpoint | null;
+  userStatus: "ENDPOINT_READY" | "NO_ENDPOINT_FOUND";
+  userMessage: string;
 }
 
 // --- Seller-facing statuses ---

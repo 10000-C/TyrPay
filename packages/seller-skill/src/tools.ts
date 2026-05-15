@@ -17,6 +17,7 @@ import type {
   AcceptTaskResult,
   CheckSettlementResult,
   ExecuteTaskResult,
+  ModelEndpointDiscoveryResult,
   RawOnChainTask,
   ReadyResult,
   ReadableContractLike,
@@ -29,6 +30,7 @@ import {
   validateAcceptTaskInput,
   validateCheckSettlementInput,
   validateExecuteTaskInput,
+  validateModelEndpointDiscoveryInput,
   validateSubmitProofInput
 } from "./validation.js";
 import { isEmptyBytes32, normalizeRawOnChainTask } from "./contract.js";
@@ -86,6 +88,7 @@ export function createSellerTools(config: SellerSkillConfig): SellerTool[] {
   const { agent, contract } = config;
   const verifierSignerAddress = resolveVerifierSignerAddress(config);
   return [
+    discoverModelEndpointTool(agent),
     acceptTaskTool(agent, contract, verifierSignerAddress),
     executeTaskTool(agent, contract),
     submitProofTool(agent, contract),
@@ -109,6 +112,168 @@ function resolveVerifierSignerAddress(config: SellerSkillConfig): string {
   return verifierSignerAddress;
 }
 
+interface ModelEndpointDiscoveryAdapterLike {
+  discoverModelEndpoints(input: {
+    model: string;
+    requestPath?: string;
+    limit?: number;
+    requireReachableEndpoint?: boolean;
+  }): Promise<unknown[]>;
+}
+
+function discoverModelEndpointTool(agent: SellerAgent): SellerTool<ModelEndpointDiscoveryResult> {
+  return {
+    name: "tyrpay_discover_model_endpoint",
+    description:
+      "Discover reachable TeeTLS/TeeML endpoints for a requested model before accepting or executing a TyrPay task. " +
+      "Use this for provider '0g-teetls' when you only know the desired model name and need the actual endpoint host/path and providerAddress. " +
+      "The recommended result can be passed to tyrpay_accept_task as host/path/method/allowedModels and to tyrpay_execute_task as provider/providerOptions.",
+    inputSchema: {
+      type: "object",
+      required: ["model"],
+      properties: {
+        model: {
+          type: "string",
+          description: "Exact model name to discover, as advertised by TeeTLS/TeeML service metadata."
+        },
+        provider: {
+          type: "string",
+          description: "Provider adapter to query. Defaults to '0g-teetls'."
+        },
+        requestPath: {
+          type: "string",
+          description: "OpenAI-compatible request path appended to provider base endpoint. Defaults to '/chat/completions'."
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of matching endpoints to return. Defaults to the adapter default."
+        },
+        requireReachableEndpoint: {
+          type: "boolean",
+          description: "Whether to only return endpoints that pass the adapter reachability probe."
+        }
+      },
+      additionalProperties: false
+    },
+    async execute(input: unknown) {
+      try {
+        const i = validateModelEndpointDiscoveryInput(input);
+        const provider = i.provider ?? "0g-teetls";
+        const adapter = resolveNamedAdapter(agent, provider);
+
+        if (!isModelEndpointDiscoveryAdapter(adapter)) {
+          throw new SellerSkillToolError({
+            code: "CONFIGURATION_ERROR",
+            message: `Provider '${provider}' does not expose model endpoint discovery.`,
+            suggestion:
+              "Configure SellerAgent with a 0G TeeTLS adapter version that implements discoverModelEndpoints, for example in zkTlsAdapters['0g-teetls'].",
+            retryable: false
+          });
+        }
+
+        const endpoints = await adapter.discoverModelEndpoints({
+          model: i.model,
+          ...(i.requestPath ? { requestPath: i.requestPath } : {}),
+          ...(i.limit ? { limit: i.limit } : {}),
+          ...(i.requireReachableEndpoint !== undefined ? { requireReachableEndpoint: i.requireReachableEndpoint } : {})
+        });
+        const normalizedEndpoints = endpoints.map((endpoint, index) => normalizeDiscoveredEndpoint(endpoint, provider, index));
+        const recommended = normalizedEndpoints[0] ?? null;
+
+        return {
+          model: i.model,
+          provider,
+          endpoints: normalizedEndpoints,
+          recommended,
+          userStatus: recommended ? "ENDPOINT_READY" : "NO_ENDPOINT_FOUND",
+          userMessage: recommended
+            ? "A TeeTLS/TeeML endpoint was found. Use the recommended host, path, model, and providerOptions for the seller workflow."
+            : "No matching TeeTLS/TeeML endpoint was found for this model."
+        };
+      } catch (error) {
+        throw wrapSellerSkillError(error);
+      }
+    }
+  };
+}
+
+function resolveNamedAdapter(agent: SellerAgent, provider: string): unknown {
+  return agent.zkTlsAdapters?.[provider] ?? (agent.zkTlsAdapter.name === provider ? agent.zkTlsAdapter : undefined);
+}
+
+function isModelEndpointDiscoveryAdapter(adapter: unknown): adapter is ModelEndpointDiscoveryAdapterLike {
+  return (
+    adapter !== null &&
+    typeof adapter === "object" &&
+    typeof (adapter as { discoverModelEndpoints?: unknown }).discoverModelEndpoints === "function"
+  );
+}
+
+function normalizeDiscoveredEndpoint(endpoint: unknown, provider: string, index: number) {
+  if (endpoint === null || typeof endpoint !== "object" || Array.isArray(endpoint)) {
+    throw new SellerSkillToolError({
+      code: "CONFIGURATION_ERROR",
+      message: `Discovered endpoint at index ${index} is not an object.`,
+      field: `endpoints[${index}]`,
+      received: endpoint,
+      retryable: false
+    });
+  }
+
+  const object = endpoint as Record<string, unknown>;
+  const endpointUrl = expectEndpointUrl(object.endpoint, index);
+  const model = expectDiscoveredString(object.model, `endpoints[${index}].model`, object.model);
+  const method = typeof object.method === "string" && object.method.length > 0 ? object.method : "POST";
+
+  return {
+    provider: typeof object.provider === "string" && object.provider.length > 0 ? object.provider : provider,
+    ...(typeof object.providerAddress === "string" && object.providerAddress.length > 0
+      ? { providerAddress: object.providerAddress }
+      : {}),
+    endpoint: endpointUrl.toString(),
+    host: typeof object.host === "string" && object.host.length > 0 ? object.host : endpointUrl.host,
+    path: typeof object.path === "string" && object.path.length > 0 ? object.path : endpointUrl.pathname,
+    method,
+    model,
+    ...(typeof object.requestPath === "string" && object.requestPath.length > 0 ? { requestPath: object.requestPath } : {}),
+    ...(typeof object.serviceType === "string" || object.serviceType === null ? { serviceType: object.serviceType } : {}),
+    ...(typeof object.verifiability === "string" || object.verifiability === null ? { verifiability: object.verifiability } : {}),
+    ...(typeof object.reachable === "boolean" ? { reachable: object.reachable } : {}),
+    ...(object.providerOptions !== undefined && object.providerOptions !== null && typeof object.providerOptions === "object" && !Array.isArray(object.providerOptions)
+      ? { providerOptions: object.providerOptions as Record<string, unknown> }
+      : {})
+  };
+}
+
+function expectEndpointUrl(input: unknown, index: number): URL {
+  const endpoint = expectDiscoveredString(input, `endpoints[${index}].endpoint`, input);
+  try {
+    return new URL(endpoint);
+  } catch {
+    throw new SellerSkillToolError({
+      code: "CONFIGURATION_ERROR",
+      message: `Discovered endpoint at index ${index} is not a valid URL.`,
+      field: `endpoints[${index}].endpoint`,
+      received: endpoint,
+      retryable: false
+    });
+  }
+}
+
+function expectDiscoveredString(input: unknown, field: string, received: unknown): string {
+  if (typeof input !== "string" || input.length === 0) {
+    throw new SellerSkillToolError({
+      code: "CONFIGURATION_ERROR",
+      message: `${field} must be a non-empty string.`,
+      field,
+      received,
+      retryable: false
+    });
+  }
+
+  return input;
+}
+
 function acceptTaskTool(
   agent: SellerAgent,
   contract: ReadableContractLike,
@@ -119,19 +284,20 @@ function acceptTaskTool(
     description:
       "Accept a TyrPay task as a seller: build the execution terms, upload them to storage, and submit them on-chain. " +
       "Use this after the buyer shares a taskId and you agree to perform the task. " +
+      "When the later execution provider is 0g-teetls, host/path/allowedModels must be the actual 0G TeeTLS endpoint and service metadata model the adapter will call. " +
       "Returns the commitment plus seller-facing status fields so the next step is clear.",
     inputSchema: {
       type: "object",
       required: ["taskId", "host", "path", "method", "allowedModels", "minTotalTokens", "deadline"],
       properties: {
         taskId: { type: "string", description: "The task ID to accept (bytes32 hex from the buyer)" },
-        host: { type: "string", description: "API hostname you will call (e.g. 'api.openai.com')" },
-        path: { type: "string", description: "API endpoint path (e.g. '/v1/chat/completions')" },
+        host: { type: "string", description: "API hostname you will call. For 0G TeeTLS, use the resolved 0G endpoint host, not a generic upstream host." },
+        path: { type: "string", description: "API endpoint path. For 0G TeeTLS, use the resolved 0G endpoint path." },
         method: { type: "string", description: "HTTP method (e.g. 'POST')" },
         allowedModels: {
           type: "array",
           items: { type: "string" },
-          description: "AI model names you may use (e.g. ['gpt-4o', 'gpt-4o-mini'])",
+          description: "AI model names you may use. For 0G TeeTLS, include the model returned by 0G service metadata.",
           minItems: 1
         },
         minTotalTokens: {

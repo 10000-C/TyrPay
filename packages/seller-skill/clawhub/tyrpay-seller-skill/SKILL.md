@@ -15,7 +15,8 @@ contract, and access to the `@tyrpay/seller-skill` tool set.
 2. Construct `SellerAgent` with a signer, settlement address, chain ID, storage adapter, and zkTLS adapter.
 3. Register `createSellerTools({ agent, contract, verifierSignerAddress })` with your tool-calling runtime.
 4. Call `tyrpay_ready` before the first task workflow.
-5. Use `tyrpay_accept_task` when you receive a `taskId` from a buyer.
+5. For 0G TeeTLS/TeeML work, call `tyrpay_discover_model_endpoint` with the target model.
+6. Use `tyrpay_accept_task` when you receive a `taskId` from a buyer.
 
 ## When To Use
 
@@ -23,15 +24,21 @@ contract, and access to the `@tyrpay/seller-skill` tool set.
 - The agent must produce zkTLS-backed proofs of upstream API calls.
 - The agent needs structured task state that is safe to show to an end user.
 - The seller workflow must remain non-blocking and recoverable after network interruptions.
+- When using 0G TeeTLS, the seller can only commit to the actual endpoint and
+  model resolved by the 0G TeeTLS adapter/service metadata. Do not commit to a
+  generic upstream endpoint or different model name.
+- When only the model is known, use `tyrpay_discover_model_endpoint` to find a
+  reachable TeeTLS/TeeML endpoint before committing.
 
 ## Workflow
 
 1. Run `tyrpay_ready` to verify signer access and storage adapter connectivity.
-2. When a buyer shares a `taskId`, call `tyrpay_accept_task` with your execution terms.
-3. Wait for the buyer to fund the task (poll with `tyrpay_check_settlement`).
-4. Once funded, call `tyrpay_execute_task` for each required upstream API call.
-5. Collect the returned receipts and call `tyrpay_submit_proof` with the full set.
-6. Use `tyrpay_check_settlement` to monitor whether verification released payment.
+2. For 0G TeeTLS/TeeML, call `tyrpay_discover_model_endpoint` and keep the recommended endpoint.
+3. When a buyer shares a `taskId`, call `tyrpay_accept_task` with your execution terms.
+4. Wait for the buyer to fund the task (poll with `tyrpay_check_settlement`).
+5. Once funded, call `tyrpay_execute_task` for each required upstream API call.
+6. Collect the returned receipts and call `tyrpay_submit_proof` with the full set.
+7. Use `tyrpay_check_settlement` to monitor whether verification released payment.
 
 ## Tooling Notes
 
@@ -43,11 +50,15 @@ contract, and access to the `@tyrpay/seller-skill` tool set.
 - The readable settlement contract must expose `getTask(bytes32)` with the
   current `TyrPaySettlement.Task` field order:
   `taskId`, `taskNonce`, `buyer`, `seller`, `token`, `amount`, `deadlineMs`,
-  `commitmentHash`, `commitmentURI`, `fundedAtMs`, `proofBundleHash`,
-  `proofBundleURI`, `proofSubmittedAtMs`, `reportHash`, `settledAtMs`,
-  `refundedAtMs`, `status`.
+  `requiredMinUsage`, `requiredModelsHash`, `commitmentHash`, `commitmentURI`,
+  `fundedAtMs`, `proofBundleHash`, `proofBundleURI`, `proofSubmittedAtMs`,
+  `reportHash`, `settledAtMs`, `refundedAtMs`, `status`.
 - `tyrpay_execute_task` requires the `commitment` object returned by `tyrpay_accept_task`.
 - `tyrpay_submit_proof` requires all receipts collected from `tyrpay_execute_task` calls.
+- For provider `"0g-teetls"`, `commitment.target.host/path` must match the
+  resolved 0G endpoint, `method` must be `POST`, and `allowedModels` must include
+  the model returned by 0G service metadata. Forward the recommended
+  `providerOptions` from `tyrpay_discover_model_endpoint` to `tyrpay_execute_task`.
 - Seller-facing statuses include `PAID` on successful settlement and `NOT_PAID_REFUNDED` on refund.
 
 ## Failure Diagnosis

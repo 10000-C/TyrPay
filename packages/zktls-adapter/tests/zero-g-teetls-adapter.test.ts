@@ -377,6 +377,71 @@ test("0G TeeTLS prepareOpenAiRequest selects a reachable chatbot provider", asyn
   );
 });
 
+test("0G TeeTLS discoverModelEndpoints finds reachable TeeML providers for a model", async () => {
+  const staleProviderAddress = "0x9999999999999999999999999999999999999999";
+  const reachableProviderAddress = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const broker = new FakeZeroGBroker();
+  broker.services = [
+    {
+      provider: staleProviderAddress,
+      serviceType: "chatbot",
+      model: "qwen/qwen-2.5-7b-instruct",
+      url: "https://compute-network-stale.0g.ai",
+      verifiability: "TeeML"
+    },
+    {
+      provider: reachableProviderAddress,
+      serviceType: "chatbot",
+      model: "qwen/qwen-2.5-7b-instruct",
+      url: "https://compute-network-live.0g.ai",
+      verifiability: "TeeML"
+    },
+    {
+      provider: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      serviceType: "chatbot",
+      model: "other-model",
+      url: "https://compute-network-other.0g.ai",
+      verifiability: "TeeML"
+    }
+  ];
+  broker.metadataByProvider.set(staleProviderAddress, {
+    endpoint: "https://compute-network-stale.0g.ai/v1/proxy",
+    model: "qwen/qwen-2.5-7b-instruct"
+  });
+  broker.metadataByProvider.set(reachableProviderAddress, {
+    endpoint: "https://compute-network-live.0g.ai/v1/proxy",
+    model: "qwen/qwen-2.5-7b-instruct"
+  });
+  const { fetchImpl, calls } = createProbeAwareFetch({
+    unreachableHost: "compute-network-stale.0g.ai"
+  });
+  const adapter = new ZeroGTeeTlsAdapter({
+    brokerFactory: () => broker,
+    fetchImpl
+  });
+
+  const endpoints = await adapter.discoverModelEndpoints({
+    model: "qwen/qwen-2.5-7b-instruct",
+    limit: 2
+  });
+
+  assert.equal(endpoints.length, 1);
+  assert.equal(endpoints[0].provider, ZERO_G_TEETLS_PROVIDER);
+  assert.equal(endpoints[0].providerAddress, reachableProviderAddress);
+  assert.equal(endpoints[0].endpoint, "https://compute-network-live.0g.ai/v1/proxy/chat/completions");
+  assert.equal(endpoints[0].host, "compute-network-live.0g.ai");
+  assert.equal(endpoints[0].path, "/v1/proxy/chat/completions");
+  assert.equal(endpoints[0].model, "qwen/qwen-2.5-7b-instruct");
+  assert.equal(endpoints[0].verifiability, "TeeML");
+  assert.deepEqual(
+    calls.map((call) => [call.url, call.init?.method]),
+    [
+      ["https://compute-network-stale.0g.ai/v1/proxy/chat/completions", "GET"],
+      ["https://compute-network-live.0g.ai/v1/proxy/chat/completions", "GET"]
+    ]
+  );
+});
+
 test("0G TeeTLS provenFetch can fallback from an unreachable configured provider", async () => {
   const staleProviderAddress = "0x9999999999999999999999999999999999999999";
   const reachableProviderAddress = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";

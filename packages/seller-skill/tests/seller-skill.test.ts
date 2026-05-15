@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { SCHEMA_VERSIONS, hashExecutionCommitment } from "@tyrpay/sdk-core";
 
 import { SellerSkillToolError, TYRPAY_SETTLEMENT_ABI, createSellerTools, normalizeRawOnChainTask } from "../src/index.js";
-import type { AcceptTaskResult, ReadyResult } from "../src/index.js";
+import type { AcceptTaskResult, ModelEndpointDiscoveryResult, ReadyResult } from "../src/index.js";
 import type { ExecutionCommitment } from "@tyrpay/sdk-core";
 
 const TASK_ID = "0x" + "a".repeat(64);
@@ -13,6 +13,7 @@ const BUYER = "0x2222222222222222222222222222222222222222";
 const VERIFIER = "0x3333333333333333333333333333333333333333";
 const TOKEN = "0x4444444444444444444444444444444444444444";
 const ZERO_HASH = "0x" + "0".repeat(64);
+const REQUIRED_MODELS_HASH = "0x" + "5".repeat(64);
 const COMMITMENT = {
   schemaVersion: SCHEMA_VERSIONS.executionCommitment,
   taskId: TASK_ID,
@@ -78,6 +79,38 @@ function createMockAgent() {
         proofBundleHash: "0xbundle" + "a".repeat(56),
         proofBundleURI: "memory://bundle"
       };
+    },
+    zkTlsAdapter: {
+      name: "mock"
+    },
+    zkTlsAdapters: {
+      "0g-teetls": {
+        name: "0g-teetls",
+        async discoverModelEndpoints(input: { model: string }) {
+          if (input.model !== "qwen/qwen-2.5-7b-instruct") {
+            return [];
+          }
+
+          return [
+            {
+              provider: "0g-teetls",
+              providerAddress: "0x5555555555555555555555555555555555555555",
+              endpoint: "https://compute-network-live.0g.ai/v1/proxy/chat/completions",
+              host: "compute-network-live.0g.ai",
+              path: "/v1/proxy/chat/completions",
+              method: "POST",
+              model: input.model,
+              requestPath: "/chat/completions",
+              serviceType: "chatbot",
+              verifiability: "TeeML",
+              reachable: true,
+              providerOptions: {
+                providerAddress: "0x5555555555555555555555555555555555555555"
+              }
+            }
+          ];
+        }
+      }
     }
   };
 }
@@ -93,6 +126,8 @@ function createMockContract(taskOverrides: Partial<Record<string, unknown>> = {}
         token: TOKEN,
         amount: 1000n,
         deadlineMs: 1760000000000n,
+        requiredMinUsage: 500n,
+        requiredModelsHash: REQUIRED_MODELS_HASH,
         commitmentHash: COMMITMENT_HASH,
         commitmentURI: "memory://commitment",
         fundedAtMs: 1759000000000n,
@@ -140,6 +175,8 @@ describe("seller-skill", () => {
       TOKEN,
       1000n,
       1760000000000n,
+      500n,
+      REQUIRED_MODELS_HASH,
       COMMITMENT_HASH,
       "memory://commitment",
       1759000000000n,
@@ -169,10 +206,11 @@ describe("seller-skill", () => {
     );
   });
 
-  it("exports 5 tools including tyrpay_ready", () => {
+  it("exports 6 tools including endpoint discovery and tyrpay_ready", () => {
     const { tools } = createTestTools();
-    assert.equal(tools.length, 5);
+    assert.equal(tools.length, 6);
     const names = tools.map((t) => t.name);
+    assert.ok(names.includes("tyrpay_discover_model_endpoint"));
     assert.ok(names.includes("tyrpay_ready"));
     assert.ok(names.includes("tyrpay_accept_task"));
     assert.ok(names.includes("tyrpay_execute_task"));
@@ -221,6 +259,36 @@ describe("seller-skill", () => {
   });
 
   // --- tyrpay_ready ---
+
+  it("tyrpay_discover_model_endpoint returns a recommended TeeML endpoint", async () => {
+    const { tools } = createTestTools();
+    const discover = tools.find((t) => t.name === "tyrpay_discover_model_endpoint");
+    assert.ok(discover);
+
+    const result = (await discover.execute({
+      model: "qwen/qwen-2.5-7b-instruct",
+      provider: "0g-teetls",
+      limit: 1
+    })) as ModelEndpointDiscoveryResult;
+
+    assert.equal(result.userStatus, "ENDPOINT_READY");
+    assert.equal(result.recommended?.host, "compute-network-live.0g.ai");
+    assert.equal(result.recommended?.path, "/v1/proxy/chat/completions");
+    assert.equal(result.recommended?.model, "qwen/qwen-2.5-7b-instruct");
+    assert.equal(result.recommended?.providerOptions?.providerAddress, "0x5555555555555555555555555555555555555555");
+  });
+
+  it("tyrpay_discover_model_endpoint reports no endpoint for unmatched models", async () => {
+    const { tools } = createTestTools();
+    const discover = tools.find((t) => t.name === "tyrpay_discover_model_endpoint");
+    assert.ok(discover);
+
+    const result = (await discover.execute({ model: "missing-model" })) as ModelEndpointDiscoveryResult;
+
+    assert.equal(result.userStatus, "NO_ENDPOINT_FOUND");
+    assert.equal(result.recommended, null);
+    assert.deepEqual(result.endpoints, []);
+  });
 
   it("tyrpay_ready returns signer address on success", async () => {
     const { tools } = createTestTools();

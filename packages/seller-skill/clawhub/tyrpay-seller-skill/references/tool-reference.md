@@ -3,6 +3,7 @@
 ## Exported Tools
 
 - `tyrpay_ready`: checks seller signer reachability and storage adapter configuration.
+- `tyrpay_discover_model_endpoint`: given a model, discovers matching reachable TeeTLS/TeeML endpoints and returns host/path/model/providerOptions for the seller workflow.
 - `tyrpay_accept_task`: builds execution commitment, uploads it, and submits on-chain.
 - `tyrpay_execute_task`: performs a zkTLS-proven API call and returns a delivery receipt.
 - `tyrpay_submit_proof`: assembles receipts into a proof bundle and submits on-chain.
@@ -17,15 +18,22 @@
 - `ExecutionCommitment.verifier` is the registry-authorized verifier signer
   address that signs `VerificationReport`; it is not a verifier contract address.
 - `tyrpay_execute_task` validates that `request.host`, `request.path`, and `request.method` match the commitment target.
+- With provider `"0g-teetls"`, the commitment target/model must be the actual
+  0G TeeTLS endpoint/model resolved by the adapter. A commitment to a generic
+  upstream endpoint or different model is invalid for TeeTLS execution.
+- Use `tyrpay_discover_model_endpoint` before accepting a task when the seller
+  only has a target model. Its `recommended.host`, `recommended.path`,
+  `recommended.method`, and `recommended.model` are commitment inputs; its
+  `recommended.providerOptions` should be forwarded to `tyrpay_execute_task`.
 - `tyrpay_submit_proof` verifies storage hash integrity after upload.
 
 ## Integration Requirements
 
 - The settlement contract ABI must match the current `TyrPaySettlement.Task`
   struct order: `taskId`, `taskNonce`, `buyer`, `seller`, `token`, `amount`,
-  `deadlineMs`, `commitmentHash`, `commitmentURI`, `fundedAtMs`,
-  `proofBundleHash`, `proofBundleURI`, `proofSubmittedAtMs`, `reportHash`,
-  `settledAtMs`, `refundedAtMs`, `status`.
+  `deadlineMs`, `requiredMinUsage`, `requiredModelsHash`, `commitmentHash`,
+  `commitmentURI`, `fundedAtMs`, `proofBundleHash`, `proofBundleURI`,
+  `proofSubmittedAtMs`, `reportHash`, `settledAtMs`, `refundedAtMs`, `status`.
 - `MemoryStorageAdapter` and `memory://` URIs are valid only for local tests in
   one process. Production or cross-agent flows need persistent retrievable
   storage.
