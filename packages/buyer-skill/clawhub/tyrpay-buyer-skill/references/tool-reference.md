@@ -18,6 +18,13 @@
   `taskId`, `taskNonce`, `createTxHash`, `timedOut`, `userStatus`, `userMessage`.
 - Manual funding uses a single commitment validation pass.
 
+## Safety Warning
+
+The settlement contract does **not** validate that the seller's commitment matches the buyer's intent.
+It is the buyer agent's responsibility to pass `expectations` to `tyrpay_post_task` or `tyrpay_fund_task`
+so that the SDK checks host, path, models, minimum usage, verifier, and deadline **before** locking payment.
+Funding without expectations accepts whatever the seller committed to.
+
 ## Buyer-Facing Statuses
 
 - `WAITING_FOR_SELLER`

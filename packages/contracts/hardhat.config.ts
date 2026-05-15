@@ -31,7 +31,12 @@ const config: HardhatUserConfig = {
             accounts: deployerPrivateKey ? [deployerPrivateKey] : []
           }
         }
-      : {})
+      : {}),
+    mainnet: {
+      url: "https://evmrpc.0g.ai",
+      chainId: 16661,
+      accounts: deployerPrivateKey ? [deployerPrivateKey] : []
+    }
   },
   paths: {
     artifacts: "./artifacts",

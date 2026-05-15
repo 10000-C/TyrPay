@@ -18,8 +18,6 @@ export interface RawOnChainTask {
   token: string;
   amount: bigint;
   deadlineMs: bigint;
-  requiredMinUsage: bigint;
-  requiredModelsHash: string;
   commitmentHash: string;
   commitmentURI: string;
   fundedAtMs: bigint;

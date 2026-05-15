@@ -33,6 +33,13 @@ It assumes the runtime already has a configured `BuyerSdk` and access to the
 5. Use `tyrpay_check_task` or `tyrpay_list_tasks` to monitor progress.
 6. If proof submission or verification stalls past protocol timeouts, call `tyrpay_refund_task`.
 
+## Critical Safety Rule
+
+- **The on-chain protocol does not enforce that the seller's commitment matches the buyer's requirements.**
+  The chain only records the commitment; it does not validate host, path, models, minimum usage, verifier, or deadline against the buyer's intent.
+- **Always pass `expectations` when funding a task** (via `tyrpay_post_task` or `tyrpay_fund_task`) so that the SDK validates the seller's commitment before locking payment.
+  Without expectations, a malicious or misconfigured seller can commit to arbitrary terms and the buyer's funds will be locked.
+
 ## Tooling Notes
 
 - All tools reject malformed inputs with structured `BuyerSkillToolError` errors.
