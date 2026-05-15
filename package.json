@@ -18,7 +18,9 @@
     "test": "turbo run test",
     "test:e2e": "corepack pnpm --filter @tyrpay/contracts test:e2e",
     "test:red-team": "corepack pnpm --filter @tyrpay/contracts test:red-team",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "release:validate": "node scripts/validate-publish.mjs",
+    "release:publish": "node scripts/validate-publish.mjs && pnpm -r publish --access public"
   },
   "pnpm": {
     "overrides": {

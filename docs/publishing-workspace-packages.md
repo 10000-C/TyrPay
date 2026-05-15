@@ -27,6 +27,10 @@ That means:
 - local development keeps strict workspace linking
 - published tarballs remain installable outside the monorepo
 
+**Important:** Only `pnpm pack` / `pnpm publish` resolve `workspace:*`.
+Using `npm publish` directly will publish the raw `workspace:*` strings,
+causing `EUNSUPPORTEDPROTOCOL` for consumers.
+
 ## Release Preconditions
 
 Before packing or publishing:
@@ -60,32 +64,27 @@ Recommended order:
 7. `@tyrpay/seller-skill`
 8. `@tyrpay/agent-kit`
 
-## Validate The Tarballs Before Publish
+## Validate Before Publish
 
-Run a dry pack for each package first:
-
-```bash
-pnpm --filter @tyrpay/buyer-skill pack --dry-run
-pnpm --filter @tyrpay/seller-skill pack --dry-run
-```
-
-If you want actual tarballs for inspection:
+Run the automated validation script that packs each package and checks
+that `workspace:*` has been resolved to real semver ranges:
 
 ```bash
-pnpm --filter @tyrpay/buyer-skill pack --pack-destination ./.release-tarballs
-pnpm --filter @tyrpay/seller-skill pack --pack-destination ./.release-tarballs
+pnpm release:validate
 ```
 
-Check that each tarball contains:
+This script:
 
-- `dist/`
-- package-level `README.md`
-- the expected `package.json`
+1. Packs every publishable package to a temp directory
+2. Extracts the `package.json` from each tarball
+3. Checks all dependency fields for unresolved `workspace:*` references
+4. Exits with code 1 if any are found
 
-Check that the packed `package.json` no longer contains raw `workspace:*`
-runtime dependency specs.
+If validation passes, proceed to publish.
 
 ## Publish Commands
+
+**Always use `pnpm publish`, never `npm publish`.**
 
 Single package:
 
@@ -93,18 +92,29 @@ Single package:
 pnpm --filter @tyrpay/buyer-skill publish --access public
 ```
 
-Multiple packages from the workspace:
+Validate and publish all packages at once:
 
 ```bash
-pnpm -r publish --access public
+pnpm release:publish
 ```
 
-If you need a tarball-first workflow:
+This runs `release:validate` first, then publishes if all checks pass.
 
-```bash
-pnpm --filter @tyrpay/buyer-skill pack --pack-destination ./.release-tarballs
-npm publish ./.release-tarballs/tyrpay-buyer-skill-<version>.tgz --access public
-```
+## Past Incidents
+
+### seller-skill 0.1.2, 0.1.8 — `workspace:*` leaked into npm
+
+**Root cause:** Published using `npm publish` or equivalent workflow that
+skipped pnpm's workspace protocol resolution. The published `package.json`
+contained raw `workspace:*` dependencies, causing `EUNSUPPORTEDPROTOCOL`
+for anyone installing the package.
+
+**Fix:** Bumped to 0.1.3 / 0.1.9. Added `scripts/validate-publish.mjs`
+and `pnpm release:validate` to catch this before it reaches npm.
+
+### seller-sdk 0.1.1, 0.1.4 — same issue
+
+Same root cause and fix as seller-skill.
 
 ## Recommended Package Checks
 
