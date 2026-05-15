@@ -500,6 +500,51 @@ test("serves verification reports over the HTTP API", async () => {
   }
 });
 
+test("serves automatic settlement results over the HTTP API", async () => {
+  const writer = new MockSettlementWriter();
+  const fixture = await buildFixture({ settlementWriter: writer });
+  const server = createVerifierHttpServer({ verifier: fixture.verifier });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const address = server.address();
+    if (typeof address !== "object" || address === null) {
+      throw new TypeError("Expected verifier HTTP server to listen on a TCP address.");
+    }
+
+    const response = await fetch(`http://127.0.0.1:${address.port}/verify`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        taskId: fixture.task.taskId,
+        markProofsConsumed: false
+      })
+    });
+    const body = (await response.json()) as {
+      settlementSubmission?: {
+        report: { taskId: string; settlementAmount: string; verifiedAt: string };
+        transactionHash?: string;
+        receipt?: { status?: number };
+      };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(writer.calls.length, 1);
+    assert.equal(body.settlementSubmission?.report.taskId, fixture.task.taskId);
+    assert.equal(body.settlementSubmission?.report.settlementAmount, fixture.task.amount);
+    assert.equal(body.settlementSubmission?.report.verifiedAt, VERIFIED_AT);
+    assert.equal(body.settlementSubmission?.transactionHash, "0xtest-settle");
+    assert.deepEqual(body.settlementSubmission?.receipt, { status: 1 });
+  } finally {
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve()))
+    );
+  }
+});
+
 test("automatically settles when a settlement writer is injected at construction", async () => {
   const writer = new MockSettlementWriter();
   const fixture = await buildFixture({ settlementWriter: writer });

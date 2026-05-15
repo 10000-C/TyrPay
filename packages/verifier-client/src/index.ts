@@ -8,6 +8,8 @@ export interface VerifierClientOptions {
 export interface VerifyTaskRequest {
   taskId: string;
   markProofsConsumed?: boolean;
+  settle?: boolean;
+  waitForSettlement?: boolean;
 }
 
 export interface VerifyTaskResponse {
@@ -19,6 +21,27 @@ export interface VerifyTaskResponse {
   checks: Record<string, boolean>;
   aggregateUsage: AggregateUsage;
   consumed: boolean;
+  settlementSubmission?: SettlementSubmissionResponse;
+}
+
+export interface SettlementReportResponse {
+  taskId: Bytes32;
+  buyer: string;
+  seller: string;
+  commitmentHash: Bytes32;
+  proofBundleHash: Bytes32;
+  passed: boolean;
+  settlementAction: number;
+  settlementAmount: string;
+  verifiedAt: string;
+  reportHash: Bytes32;
+}
+
+export interface SettlementSubmissionResponse {
+  report: SettlementReportResponse;
+  signature: string;
+  transactionHash?: string;
+  receipt?: unknown;
 }
 
 export class VerifierClient {

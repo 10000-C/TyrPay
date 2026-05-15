@@ -236,6 +236,15 @@ export interface VerificationResult {
   settlementSubmission?: SettlementSubmission;
 }
 
+export interface VerificationHttpResult {
+  report: VerificationReport;
+  reportPointer: StoragePointer;
+  checks: RequiredVerificationChecks;
+  aggregateUsage: AggregateUsage;
+  consumed: boolean;
+  settlementSubmission?: SettlementSubmissionHttpResult;
+}
+
 export interface VerifierHttpServerOptions {
   verifier: CentralizedVerifier;
   pathPrefix?: string;
@@ -265,6 +274,26 @@ export interface SettlementSubmission {
   report: SettlementReportStruct;
   signature: string;
   transaction: SettlementTransactionResponseLike;
+  receipt?: unknown;
+}
+
+export interface SettlementReportHttpStruct {
+  taskId: Bytes32;
+  buyer: Address;
+  seller: Address;
+  commitmentHash: Bytes32;
+  proofBundleHash: Bytes32;
+  passed: boolean;
+  settlementAction: number;
+  settlementAmount: UIntString;
+  verifiedAt: UIntString;
+  reportHash: Bytes32;
+}
+
+export interface SettlementSubmissionHttpResult {
+  report: SettlementReportHttpStruct;
+  signature: string;
+  transactionHash?: string;
   receipt?: unknown;
 }
 
@@ -845,7 +874,7 @@ export function createVerifierHttpServer(options: VerifierHttpServerOptions): Se
           settle: body.settle,
           waitForSettlement: body.waitForSettlement
         });
-        writeJson(response, 200, result);
+        writeJson(response, 200, toVerificationHttpResult(result));
         return;
       }
 
@@ -916,6 +945,68 @@ export function toSettlementReportStruct(
     verifiedAt: BigInt(report.verifiedAt),
     reportHash: report.reportHash ?? hashVerificationReport(report)
   };
+}
+
+export function toVerificationHttpResult(result: VerificationResult): VerificationHttpResult {
+  return {
+    report: result.report,
+    reportPointer: result.reportPointer,
+    checks: result.checks,
+    aggregateUsage: result.aggregateUsage,
+    consumed: result.consumed,
+    settlementSubmission: result.settlementSubmission
+      ? {
+          report: toSettlementReportHttpStruct(result.settlementSubmission.report),
+          signature: result.settlementSubmission.signature,
+          transactionHash: result.settlementSubmission.transaction.hash,
+          receipt: toJsonCompatible(result.settlementSubmission.receipt)
+        }
+      : undefined
+  };
+}
+
+export function toSettlementReportHttpStruct(report: SettlementReportStruct): SettlementReportHttpStruct {
+  return {
+    taskId: report.taskId,
+    buyer: report.buyer,
+    seller: report.seller,
+    commitmentHash: report.commitmentHash,
+    proofBundleHash: report.proofBundleHash,
+    passed: report.passed,
+    settlementAction: report.settlementAction,
+    settlementAmount: report.settlementAmount.toString(),
+    verifiedAt: report.verifiedAt.toString(),
+    reportHash: report.reportHash
+  };
+}
+
+function toJsonCompatible(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+
+  if (typeof value === "function" || typeof value === "symbol") {
+    return undefined;
+  }
+
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+
+  if (seen.has(value)) {
+    return undefined;
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => toJsonCompatible(entry, seen));
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([key, entry]) => [key, toJsonCompatible(entry, seen)] as const)
+      .filter(([, entry]) => entry !== undefined)
+  );
 }
 
 export function normalizeChainTask(input: ChainTaskLike): OnChainTask {
