@@ -2,8 +2,8 @@
   "name": "task-context.basic",
   "objectType": "TaskContext",
   "object": {
-    "schemaVersion": "fulfillpay.task-context.v1",
-    "protocol": "FulfillPay",
+    "schemaVersion": "TyrPay.task-context.v1",
+    "protocol": "TyrPay",
     "version": 1,
     "chainId": "31337",
     "settlementContract": "0x4444444444444444444444444444444444444444",
@@ -13,7 +13,7 @@
     "buyer": "0x1111111111111111111111111111111111111111",
     "seller": "0x2222222222222222222222222222222222222222"
   },
-  "canonical": "{\"buyer\":\"0x1111111111111111111111111111111111111111\",\"chainId\":\"31337\",\"commitmentHash\":\"0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a\",\"protocol\":\"FulfillPay\",\"schemaVersion\":\"fulfillpay.task-context.v1\",\"seller\":\"0x2222222222222222222222222222222222222222\",\"settlementContract\":\"0x4444444444444444444444444444444444444444\",\"taskId\":\"0x5555555555555555555555555555555555555555555555555555555555555555\",\"taskNonce\":\"0x6666666666666666666666666666666666666666666666666666666666666666\",\"version\":1}",
+  "canonical": "{\"buyer\":\"0x1111111111111111111111111111111111111111\",\"chainId\":\"31337\",\"commitmentHash\":\"0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a\",\"protocol\":\"TyrPay\",\"schemaVersion\":\"TyrPay.task-context.v1\",\"seller\":\"0x2222222222222222222222222222222222222222\",\"settlementContract\":\"0x4444444444444444444444444444444444444444\",\"taskId\":\"0x5555555555555555555555555555555555555555555555555555555555555555\",\"taskNonce\":\"0x6666666666666666666666666666666666666666666666666666666666666666\",\"version\":1}",
   "hash": "0x1385f097d4a29a5e8268c6da90fc09848c035b8199f1b32d41c3a38f2d374207",
   "notes": "Canonical task binding context reused by call intents and delivery receipts."
 }

@@ -1,15 +1,35 @@
 {
-  "name": "fulfillpay",
+  "name": "tyrpay",
   "private": true,
   "packageManager": "pnpm@10.0.0",
   "scripts": {
     "build": "turbo run build",
+    "contracts:clean": "corepack pnpm --filter @tyrpay/contracts clean",
+    "contracts:compile": "corepack pnpm --filter @tyrpay/contracts compile",
+    "contracts:deploy:local": "corepack pnpm --filter @tyrpay/contracts deploy:local",
+    "contracts:deploy:testnet": "corepack pnpm --filter @tyrpay/contracts deploy:testnet",
+    "contracts:e2e:mock:testnet": "corepack pnpm --filter @tyrpay/contracts e2e:mock:testnet",
+    "contracts:e2e:mock:boundaries:testnet": "corepack pnpm --filter @tyrpay/contracts e2e:mock:boundaries:testnet",
+    "contracts:node": "corepack pnpm --filter @tyrpay/contracts node",
+    "contracts:test": "corepack pnpm --filter @tyrpay/contracts test",
+    "contracts:typecheck": "corepack pnpm --filter @tyrpay/contracts typecheck",
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
+    "test:e2e": "corepack pnpm --filter @tyrpay/contracts test:e2e",
+    "test:red-team": "corepack pnpm --filter @tyrpay/contracts test:red-team",
+    "typecheck": "turbo run typecheck",
+    "release:validate": "node scripts/validate-publish.mjs",
+    "release:publish": "node scripts/validate-publish.mjs && pnpm -r publish --access public"
+  },
+  "pnpm": {
+    "overrides": {
+      "@reclaimprotocol/tls": "github:reclaimprotocol/tls#8e0669a220341432673a20bb51f9339555701ef4"
+    }
   },
   "devDependencies": {
+    "@reclaimprotocol/js-sdk": "^5.4.0",
+    "@reclaimprotocol/zk-fetch": "^0.8.0",
     "turbo": "^2.5.3",
     "typescript": "^5.8.3"
   }

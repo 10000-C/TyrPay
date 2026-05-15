@@ -2,16 +2,16 @@
   "name": "task-intent.basic",
   "objectType": "TaskIntent",
   "object": {
-    "schemaVersion": "fulfillpay.task-intent.v1",
+    "schemaVersion": "TyrPay.task-intent.v1",
     "buyer": "0x1111111111111111111111111111111111111111",
     "seller": "0x2222222222222222222222222222222222222222",
     "token": "0x3333333333333333333333333333333333333333",
     "amount": "1000000",
     "deadline": "1735689600000",
     "metadataHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "metadataURI": "ipfs://fulfillpay/task-metadata/basic"
+    "metadataURI": "ipfs://TyrPay/task-metadata/basic"
   },
-  "canonical": "{\"amount\":\"1000000\",\"buyer\":\"0x1111111111111111111111111111111111111111\",\"deadline\":\"1735689600000\",\"metadataHash\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"metadataURI\":\"ipfs://fulfillpay/task-metadata/basic\",\"schemaVersion\":\"fulfillpay.task-intent.v1\",\"seller\":\"0x2222222222222222222222222222222222222222\",\"token\":\"0x3333333333333333333333333333333333333333\"}",
+  "canonical": "{\"amount\":\"1000000\",\"buyer\":\"0x1111111111111111111111111111111111111111\",\"deadline\":\"1735689600000\",\"metadataHash\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"metadataURI\":\"ipfs://TyrPay/task-metadata/basic\",\"schemaVersion\":\"TyrPay.task-intent.v1\",\"seller\":\"0x2222222222222222222222222222222222222222\",\"token\":\"0x3333333333333333333333333333333333333333\"}",
   "hash": "0x3cabd998e069ab6b94aadf54065f52f4822d1f0b74b53b18003ec0bdc03a6990",
   "notes": "Minimal funded-task intent fixture for Phase 1 protocol vectors."
 }

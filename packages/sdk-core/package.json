@@ -1,13 +1,22 @@
 {
-  "name": "@fulfillpay/sdk-core",
-  "private": true,
+  "name": "@tyrpay/sdk-core",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "echo \"sdk-core tests pending\"",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/tests/sdk-core.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "ethers": "^6.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30"
   }
 }

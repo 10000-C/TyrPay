@@ -6,3 +6,10 @@ coverage/
 artifacts/
 cache/
 .pnpm-store/
+typechain-types/
+deployments/
+.test-dist/
+.github/
+
+# Ignore environment files 
+.env

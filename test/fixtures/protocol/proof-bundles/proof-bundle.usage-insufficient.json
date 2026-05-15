@@ -1,0 +1,49 @@
+{
+  "name": "proof-bundle.usage-insufficient",
+  "objectType": "ProofBundle",
+  "object": {
+    "schemaVersion": "TyrPay.proof-bundle.v1",
+    "taskId": "0x5555555555555555555555555555555555555555555555555555555555555555",
+    "commitmentHash": "0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a",
+    "seller": "0x2222222222222222222222222222222222222222",
+    "receipts": [
+      {
+        "schemaVersion": "TyrPay.delivery-receipt.v1",
+        "taskContext": {
+          "schemaVersion": "TyrPay.task-context.v1",
+          "protocol": "TyrPay",
+          "version": 1,
+          "chainId": "31337",
+          "settlementContract": "0x4444444444444444444444444444444444444444",
+          "taskId": "0x5555555555555555555555555555555555555555555555555555555555555555",
+          "taskNonce": "0x6666666666666666666666666666666666666666666666666666666666666666",
+          "commitmentHash": "0x6ca31a2e5bc526c2172ca32f128213d9b1e3bd699b0eee446e7d3172357f528a",
+          "buyer": "0x1111111111111111111111111111111111111111",
+          "seller": "0x2222222222222222222222222222222222222222"
+        },
+        "callIndex": 0,
+        "callIntentHash": "0xddd7776ef8be07ac441076aefa5eb46859a31129311dbad6b8b72f864775d76b",
+        "provider": "mock",
+        "providerProofId": "mock-proof-0001",
+        "requestHash": "0x9999999999999999999999999999999999999999999999999999999999999999",
+        "responseHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "observedAt": "1735686000000",
+        "extracted": {
+          "model": "gpt-4o-mini",
+          "usage": {
+            "totalTokens": 50
+          }
+        },
+        "rawProofHash": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "rawProofURI": "ipfs://TyrPay/raw-proof/mock-proof-0001"
+      }
+    ],
+    "aggregateUsage": {
+      "totalTokens": 50
+    },
+    "createdAt": "1735686600000"
+  },
+  "canonical": null,
+  "hash": null,
+  "notes": "aggregateUsage.totalTokens = 50 < commitment.minUsage.totalTokens = 120. Verifier check: usageSatisfied = false → passed = false → REFUND. See E2E-09 (model-usage suite)."
+}

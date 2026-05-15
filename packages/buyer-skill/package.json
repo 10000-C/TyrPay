@@ -1,0 +1,32 @@
+{
+  "name": "@tyrpay/buyer-skill",
+  "version": "0.1.5",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "clawhub"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "corepack pnpm --filter @tyrpay/sdk-core build && corepack pnpm --filter @tyrpay/buyer-sdk build && tsc -p tsconfig.test.json && node --test .test-dist/tests/buyer-skill.test.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@tyrpay/buyer-sdk": "workspace:*",
+    "@tyrpay/sdk-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30"
+  }
+}

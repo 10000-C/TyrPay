@@ -10,20 +10,20 @@ Every protocol object MUST carry a `schemaVersion` field.
 Version string format:
 
 ```text
-fulfillpay.<object-name>.v<major>
+TyrPay.<object-name>.v<major>
 ```
 
 Phase 1 freezes the following major versions:
 
 | Object | `schemaVersion` |
 |---|---|
-| `TaskIntent` | `fulfillpay.task-intent.v1` |
-| `TaskContext` | `fulfillpay.task-context.v1` |
-| `ExecutionCommitment` | `fulfillpay.execution-commitment.v1` |
-| `CallIntent` | `fulfillpay.call-intent.v1` |
-| `DeliveryReceipt` | `fulfillpay.delivery-receipt.v1` |
-| `ProofBundle` | `fulfillpay.proof-bundle.v1` |
-| `VerificationReport` | `fulfillpay.verification-report.v1` |
+| `TaskIntent` | `TyrPay.task-intent.v1` |
+| `TaskContext` | `TyrPay.task-context.v1` |
+| `ExecutionCommitment` | `TyrPay.execution-commitment.v1` |
+| `CallIntent` | `TyrPay.call-intent.v1` |
+| `DeliveryReceipt` | `TyrPay.delivery-receipt.v1` |
+| `ProofBundle` | `TyrPay.proof-bundle.v1` |
+| `VerificationReport` | `TyrPay.verification-report.v1` |
 
 Versioning rules:
 
@@ -39,19 +39,19 @@ Versioning rules:
 
 ```json
 {
-  "schemaVersion": "fulfillpay.execution-commitment.v1"
+  "schemaVersion": "TyrPay.execution-commitment.v1"
 }
 ```
 
 ```json
 {
-  "schemaVersion": "fulfillpay.delivery-receipt.v1"
+  "schemaVersion": "TyrPay.delivery-receipt.v1"
 }
 ```
 
 ```json
 {
-  "schemaVersion": "fulfillpay.proof-bundle.v1"
+  "schemaVersion": "TyrPay.proof-bundle.v1"
 }
 ```
 
@@ -71,7 +71,7 @@ Created by Buyer and materialized by the settlement contract.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | string | Yes | `"fulfillpay.task-intent.v1"` |
+| `schemaVersion` | string | Yes | `"TyrPay.task-intent.v1"` |
 | `buyer` | `Address` | Yes | Buyer wallet. |
 | `seller` | `Address` | Yes | Expected Seller wallet. |
 | `token` | `Address` | Yes | ERC-20 token. Native token support is out of scope for M0. |
@@ -86,8 +86,8 @@ Bound into every proof context and every call intent.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | string | Yes | `"fulfillpay.task-context.v1"` |
-| `protocol` | string | Yes | MUST be `"FulfillPay"`. |
+| `schemaVersion` | string | Yes | `"TyrPay.task-context.v1"` |
+| `protocol` | string | Yes | MUST be `"TyrPay"`. |
 | `version` | number | Yes | MUST be `1`. |
 | `chainId` | `UIntString` | Yes | Settlement chain ID. |
 | `settlementContract` | `Address` | Yes | Contract verifying reports. |
@@ -103,7 +103,7 @@ Seller's promise about what will be called and what must be proven.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | string | Yes | `"fulfillpay.execution-commitment.v1"` |
+| `schemaVersion` | string | Yes | `"TyrPay.execution-commitment.v1"` |
 | `taskId` | `Bytes32` | Yes | Bound task. |
 | `buyer` | `Address` | Yes | Must match task. |
 | `seller` | `Address` | Yes | Must match task. |
@@ -126,7 +126,7 @@ proof context and receipts.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | string | Yes | `"fulfillpay.call-intent.v1"` |
+| `schemaVersion` | string | Yes | `"TyrPay.call-intent.v1"` |
 | `taskContextHash` | `Bytes32` | Yes | Hash of `TaskContext`. |
 | `callIndex` | number | Yes | Zero-based index within a proof bundle. |
 | `host` | string | Yes | Must satisfy commitment target. |
@@ -141,7 +141,7 @@ Standardized receipt produced by zkTLS adapter.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | string | Yes | `"fulfillpay.delivery-receipt.v1"` |
+| `schemaVersion` | string | Yes | `"TyrPay.delivery-receipt.v1"` |
 | `taskContext` | `TaskContext` | Yes | Must match task and commitment. |
 | `callIndex` | number | Yes | Must be unique within bundle. Duplicate `callIndex` values MUST be rejected in Phase 1. |
 | `callIntentHash` | `Bytes32` | Yes | Hash of `CallIntent`. |
@@ -163,7 +163,7 @@ Seller-submitted aggregate of receipts.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | string | Yes | `"fulfillpay.proof-bundle.v1"` |
+| `schemaVersion` | string | Yes | `"TyrPay.proof-bundle.v1"` |
 | `taskId` | `Bytes32` | Yes | Bound task. |
 | `commitmentHash` | `Bytes32` | Yes | Bound commitment. |
 | `seller` | `Address` | Yes | Must match task. |
@@ -178,7 +178,7 @@ Verifier-signed decision consumed by the settlement contract.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | string | Yes | `"fulfillpay.verification-report.v1"` |
+| `schemaVersion` | string | Yes | `"TyrPay.verification-report.v1"` |
 | `chainId` | `UIntString` | Yes | EIP-712 domain binding. |
 | `settlementContract` | `Address` | Yes | EIP-712 domain binding. |
 | `taskId` | `Bytes32` | Yes | Bound task. |
@@ -213,6 +213,9 @@ REFUNDED
 SDKs MAY expose `EXECUTING`, `VERIFIED_PASS`, and `VERIFIED_FAIL` as derived
 statuses. SDKs MAY also expose `EXPIRED` for unfunded tasks whose `deadline`
 has passed. Derived values MUST NOT be required for contract safety.
+
+Phase 1 SDK 仅实现 `EXECUTING` 和 `EXPIRED`；`VERIFIED_PASS` / `VERIFIED_FAIL`
+暂不实现，Buyer Agent 可通过 `getReport()` 主动查询 report 结果。
 
 ## SettlementAction
 

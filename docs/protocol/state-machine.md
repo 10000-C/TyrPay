@@ -1,6 +1,6 @@
 # Task State Machine
 
-This document defines the canonical FulfillPay Phase 1 task state machine.
+This document defines the canonical TyrPay Phase 1 task state machine.
 
 ## Design Choice
 
@@ -21,7 +21,8 @@ before proof submission. It does not need to be stored on-chain.
 
 `VERIFIED_PASS` and `VERIFIED_FAIL` are verifier report outcomes. A settlement
 contract MAY emit events for them, but the canonical persistent final states are
-`SETTLED` and `REFUNDED`.
+`SETTLED` and `REFUNDED`. Phase 1 SDK 暂不实现这两个派生状态；Buyer Agent 可
+通过 `getReport()` 主动查询 report 结果，或等待链上状态变为 `SETTLED` / `REFUNDED`。
 
 Unfunded expiration is represented as a derived SDK status, not a settlement
 state. If no escrow exists, there is nothing to refund.
@@ -64,7 +65,7 @@ stateDiagram-v2
 |---|---|---|---|
 | `createTaskIntent` | Buyer | Seller, amount, token, and deadline are valid. | Creates `taskId`, `taskNonce`, and `INTENT_CREATED`. |
 | `submitCommitment` | Seller | State is `INTENT_CREATED`; commitment hash and URI are non-empty; task is not expired. | Stores commitment data and moves to `COMMITMENT_SUBMITTED`. |
-| `fundTask` | Buyer | State is `COMMITMENT_SUBMITTED`; commitment is accepted; amount and token match task. | Transfers funds into escrow and moves to `FUNDED`. |
+| `fundTask` | Buyer | State is `COMMITMENT_SUBMITTED`; commitment is accepted; amount and token match task. Buyer SDK 强制在锁款前校验 commitment（`validateCommitment`），确保链下承诺内容符合 Buyer 预期；合约本身不校验 commitment 语义。 | Transfers funds into escrow and moves to `FUNDED`. |
 | `submitProofBundle` | Seller | State is `FUNDED`; proof hash and URI are non-empty; current time is within the contract-defined proof submission grace period; receipts still must prove execution within the task window. | Stores proof bundle data and moves to `PROOF_SUBMITTED`. |
 | `settle` | Anyone or authorized relayer | State is `PROOF_SUBMITTED`; report signature is from an authorized verifier; report binds task and proof bundle. | Releases funds and moves to `SETTLED` if report passes; refunds and moves to `REFUNDED` if report fails. |
 | `refundAfterProofSubmissionDeadline` | Buyer or anyone | State is `FUNDED`; the proof submission grace period has ended; no proof bundle was accepted. | Refunds escrow and moves to `REFUNDED`. |
@@ -91,10 +92,10 @@ SDKs MAY expose derived statuses for user experience:
 |---|---|
 | `EXECUTING` | Contract state is `FUNDED` and no proof bundle is submitted. |
 | `EXPIRED` | Contract state is `INTENT_CREATED` or `COMMITMENT_SUBMITTED`, `deadline` has passed, and no funds are escrowed. |
-| `VERIFIED_PASS` | Verifier report exists with `passed=true`, before or during settlement submission. |
-| `VERIFIED_FAIL` | Verifier report exists with `passed=false`, before or during settlement submission. |
+| `VERIFIED_PASS` | Verifier report exists with `passed=true`, before or during settlement submission. **Phase 1 暂不实现**；Buyer Agent 可通过 `getReport()` 主动查询。 |
+| `VERIFIED_FAIL` | Verifier report exists with `passed=false`, before or during settlement submission. **Phase 1 暂不实现**；Buyer Agent 可通过 `getReport()` 主动查询。 |
 
-Derived statuses MUST NOT be required for contract safety.
+Derived statuses MUST NOT be required for contract safety. Phase 1 SDK 仅实现 `EXECUTING` 和 `EXPIRED`；`VERIFIED_PASS` / `VERIFIED_FAIL` 留待后续迭代。
 
 ## Timing Semantics
 

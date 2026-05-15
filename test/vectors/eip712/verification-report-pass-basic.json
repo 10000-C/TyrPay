@@ -2,13 +2,13 @@
   "name": "verification-report-pass-basic",
   "scenario": "EIP-712 digest for the unsigned passing verification report in the basic Phase 1 task.",
   "domain": {
-    "name": "FulfillPay",
+    "name": "TyrPay",
     "version": "1",
     "chainId": "31337",
     "verifyingContract": "0x4444444444444444444444444444444444444444"
   },
   "domainType": "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)",
-  "reportType": "VerificationReport(bytes32 taskId,address buyer,address seller,bytes32 commitmentHash,bytes32 proofBundleHash,bool passed,uint8 settlementAction,uint256 settlementAmount,uint256 verifiedAt)",
+  "reportType": "VerificationReport(bytes32 taskId,address buyer,address seller,bytes32 commitmentHash,bytes32 proofBundleHash,bool passed,uint8 settlementAction,uint256 settlementAmount,uint256 verifiedAt,bytes32 reportHash)",
   "message": {
     "taskId": "0x5555555555555555555555555555555555555555555555555555555555555555",
     "buyer": "0x1111111111111111111111111111111111111111",
@@ -18,14 +18,15 @@
     "passed": true,
     "settlementAction": 1,
     "settlementAmount": "1000000",
-    "verifiedAt": "1735686900000"
+    "verifiedAt": "1735686900000",
+    "reportHash": "0x4e0608cf3e990bf12dad76e616c9bb51f4eb117aa140cc94001868f4fa328a82"
   },
   "typeHashes": {
-    "nameHash": "0xe2c49266b3e4e9e046bed8bc623397e17a74c1a49d1e0037a065a7f8510a3c80",
+    "nameHash": "0x3b5d5af36bac1eef9146961c53fa91f8ebe7b43e0a5d1086ecba1423992ccc93",
     "versionHash": "0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6",
-    "domainSeparator": "0x24b3aa9c4fe0856f88593c669f4845c91c217001e4dd664a60975b6d9342f55b",
-    "structHash": "0x59cae312930240554596306a4a795c7bd38128b3ce7ff40b2060c6559e12cf04",
-    "digest": "0x3caef0a0c90f1e159d09a4c10db502eb964a8f7049ba8ccb7d1b6f5de72e0c6e"
+    "domainSeparator": "0xd91610710a446515e5e86878090fca0719353c32f174e87811251d594a2ec59d",
+    "structHash": "0x899a12b1df38bbe6e5e71c221cde04a6f33e6c287fe121ef47b087f8592c40d0",
+    "digest": "0x52ab69c04112c768ac7be1b09310d2cbc9e5399ac4db7bb17d49d2f3a1d5e8dd"
   },
   "fixture": "test/fixtures/protocol/verification-reports/verification-report.pass-basic.unsigned.json"
 }

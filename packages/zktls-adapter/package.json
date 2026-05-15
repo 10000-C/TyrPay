@@ -1,13 +1,36 @@
 {
-  "name": "@fulfillpay/zktls-adapter",
-  "private": true,
-  "version": "0.1.0",
+  "name": "@tyrpay/zktls-adapter",
+  "version": "0.1.4",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "echo \"zktls-adapter tests pending\"",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/tests/mock-zktls-adapter.test.js .test-dist/tests/reclaim-zktls-adapter.test.js .test-dist/tests/zero-g-teetls-adapter.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@tyrpay/sdk-core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@reclaimprotocol/js-sdk": "^5.4.0",
+    "@reclaimprotocol/zk-fetch": "^0.8.0"
+  },
+  "peerDependenciesMeta": {
+    "@reclaimprotocol/js-sdk": {
+      "optional": true
+    },
+    "@reclaimprotocol/zk-fetch": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30"
   }
 }

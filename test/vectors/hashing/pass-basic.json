@@ -8,7 +8,7 @@
     "callIntentHash": "0xddd7776ef8be07ac441076aefa5eb46859a31129311dbad6b8b72f864775d76b",
     "receiptHash": "0xf819ac0b3dd7fb8e6a0921bbd3aa213c2a9861c1c3ecbcd8d6bbf5254e8774e3",
     "proofBundleHash": "0xcb24838e336e57d8398dc543b2fa406471f724b26321ab4f3cce4814891de3d7",
-    "verificationReportHash": "0xc651276636791738328a0ce58cc3f52ef786f1ef1814144ea8a6857e31f0e715"
+    "verificationReportHash": "0x4e0608cf3e990bf12dad76e616c9bb51f4eb117aa140cc94001868f4fa328a82"
   },
   "fixtures": {
     "taskIntent": "test/fixtures/protocol/task-intents/task-intent.basic.json",

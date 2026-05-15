@@ -1,13 +1,23 @@
 {
-  "name": "@fulfillpay/storage-adapter",
-  "private": true,
+  "name": "@tyrpay/storage-adapter",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "echo \"storage-adapter tests pending\"",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/tests/storage-adapter.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@0gfoundation/0g-storage-ts-sdk": "^1.2.9",
+    "@tyrpay/sdk-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30"
   }
 }
